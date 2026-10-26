@@ -47,7 +47,7 @@ jobs:
       # Takes a while, so the result is cached until the script changes.
       - name: Restore OpenVPN binaries
         id: openvpn-cache
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: native/out
           key: openvpn-${{ hashFiles('native/build-openvpn.sh') }}-ndk-${{ env.NDK_VERSION }}
@@ -60,6 +60,14 @@ jobs:
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" >/tmp/sdk.log 2>&1 \
             || { echo "::error title=NDK install failed::$(tail -5 /tmp/sdk.log | tr '\n' ' ')"; exit 1; }
           native/build-openvpn.sh "$ANDROID_HOME/ndk/${NDK_VERSION}" native/out
+
+      # Saved right away, so a later failing step does not throw the build away.
+      - name: Save OpenVPN binaries
+        if: steps.openvpn-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: native/out
+          key: openvpn-${{ hashFiles('native/build-openvpn.sh') }}-ndk-${{ env.NDK_VERSION }}
 
       - name: Add OpenVPN to the app
         run: |
