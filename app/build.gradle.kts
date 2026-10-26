@@ -14,6 +14,9 @@ val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.trim()?.takeIf
 
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
+// The emulator tests (.github/workflows/e2e.yml) add x86_64; releases are ARM only.
+val extraAbis = (findProperty("extraAbis") as String?).orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
 // Lets the apps post their logs to the developer (GitHub issue #1 of this repo).
 // LOG_TOKEN is a repository secret: a fine-grained token limited to this repo's issues.
 val logToken = System.getenv("LOG_TOKEN")?.trim().orEmpty()
@@ -29,7 +32,7 @@ android {
         targetSdk = 36
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
-        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") + extraAbis }
         buildConfigField("String", "LOG_TOKEN", "\"$logToken\"")
         buildConfigField("String", "LOG_REPO", "\"$logRepo\"")
         buildConfigField("int", "LOG_ISSUE", "1")
