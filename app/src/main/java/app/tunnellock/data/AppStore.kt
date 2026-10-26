@@ -63,6 +63,10 @@ class AppStore(context: Context) {
     private val _pauseWhenDisconnected = MutableStateFlow(prefs.getBoolean(KEY_PAUSE_WHEN_DISCONNECTED, true))
     val pauseWhenDisconnected: StateFlow<Boolean> = _pauseWhenDisconnected
 
+    /** When the server stops answering, switch to the fastest other server that works. */
+    private val _failover = MutableStateFlow(prefs.getBoolean(KEY_FAILOVER, true))
+    val failover: StateFlow<Boolean> = _failover
+
     @Synchronized
     fun addServers(parsed: List<ParsedServer>, subscriptionId: String? = null): Int {
         val added = parsed.map { it.toStored(subscriptionId) }
@@ -73,13 +77,20 @@ class AppStore(context: Context) {
         return added.size
     }
 
-    /** Replaces a subscription's servers, keeping the selection when a server with the same link survives. */
+    /**
+     * Replaces a subscription's servers. If the selected server came from it, the
+     * selection moves to the same link, else the same name, else its first server,
+     * so a refresh never leaves nothing selected.
+     */
     @Synchronized
     fun replaceSubscriptionServers(subscriptionId: String, parsed: List<ParsedServer>, usage: SubscriptionUsage?) {
-        val selectedLink = _servers.value.find { it.id == _selectedId.value }?.link
+        val selected = _servers.value.find { it.id == _selectedId.value }
         val fresh = parsed.map { it.toStored(subscriptionId) }
         saveServers(_servers.value.filter { it.subscriptionId != subscriptionId } + fresh)
-        fresh.find { it.link == selectedLink }?.let { select(it.id) }
+        if (selected != null && selected.subscriptionId == subscriptionId) {
+            (fresh.find { it.link == selected.link } ?: fresh.find { it.name == selected.name } ?: fresh.firstOrNull())
+                ?.let { select(it.id) }
+        }
         _subscriptions.value = _subscriptions.value.map {
             if (it.id == subscriptionId) it.copy(updatedAt = System.currentTimeMillis(), usage = usage ?: it.usage) else it
         }
@@ -101,6 +112,12 @@ class AppStore(context: Context) {
         prefs.edit().putString(KEY_SELECTED, id).apply()
     }
 
+    /** Selects the server with this link. Ids change when a subscription is refreshed; links do not. */
+    @Synchronized
+    fun selectByLink(link: String) {
+        _servers.value.find { it.link == link }?.let { select(it.id) }
+    }
+
     fun setAutoConnect(enabled: Boolean) {
         _autoConnect.value = enabled
         prefs.edit().putBoolean(KEY_AUTO_CONNECT, enabled).apply()
@@ -109,6 +126,11 @@ class AppStore(context: Context) {
     fun setPauseWhenDisconnected(enabled: Boolean) {
         _pauseWhenDisconnected.value = enabled
         prefs.edit().putBoolean(KEY_PAUSE_WHEN_DISCONNECTED, enabled).apply()
+    }
+
+    fun setFailover(enabled: Boolean) {
+        _failover.value = enabled
+        prefs.edit().putBoolean(KEY_FAILOVER, enabled).apply()
     }
 
     @Synchronized
@@ -206,5 +228,6 @@ class AppStore(context: Context) {
         const val KEY_SELECTED = "selected"
         const val KEY_AUTO_CONNECT = "autoConnect"
         const val KEY_PAUSE_WHEN_DISCONNECTED = "pauseWhenDisconnected"
+        const val KEY_FAILOVER = "failover"
     }
 }
