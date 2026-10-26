@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.LocaleList
+import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.BuildConfig
 import app.tunnellock.R
@@ -51,6 +53,12 @@ fun SettingsScreen(vm: MainViewModel) {
     }
     var showLogs by remember { mutableStateOf(false) }
     if (showLogs) LogsDialog(onDismiss = { showLogs = false })
+    val power = remember { context.getSystemService(PowerManager::class.java) }
+    var unrestricted by remember { mutableStateOf(power.isIgnoringBatteryOptimizations(context.packageName)) }
+    LifecycleResumeEffect(Unit) {
+        unrestricted = power.isIgnoringBatteryOptimizations(context.packageName)
+        onPauseOrDispose { }
+    }
 
     Column(
         Modifier
@@ -94,6 +102,14 @@ fun SettingsScreen(vm: MainViewModel) {
             HorizontalDivider()
         }
         ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_battery)) },
+            supportingContent = {
+                Text(stringResource(if (unrestricted) R.string.settings_battery_on else R.string.settings_battery_off))
+            },
+            modifier = Modifier.clickable { openBatterySettings(context, unrestricted) },
+        )
+        HorizontalDivider()
+        ListItem(
             headlineContent = { Text(stringResource(R.string.settings_reapply)) },
             supportingContent = { Text(stringResource(R.string.settings_reapply_desc)) },
             modifier = Modifier.clickable { vm.reapplyPolicies() },
@@ -126,6 +142,17 @@ fun SettingsScreen(vm: MainViewModel) {
             }
         }
     }
+}
+
+/**
+ * Asks Android to stop limiting TunnelLock to save battery (some phones, Samsung
+ * especially, otherwise put apps to sleep). If already allowed, opens the list.
+ */
+private fun openBatterySettings(context: android.content.Context, unrestricted: Boolean) {
+    val request = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+    val list = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+    runCatching { context.startActivity(if (unrestricted) list else request) }
+        .onFailure { runCatching { context.startActivity(list) } }
 }
 
 private fun setLanguage(context: android.content.Context, tag: String) {

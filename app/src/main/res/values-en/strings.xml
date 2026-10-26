@@ -189,4 +189,7 @@
     <string name="msg_ovpn_imported">OpenVPN server “%1$s” added.</string>
     <string name="msg_login_saved">Login for “%1$s” saved.</string>
     <string name="msg_file_read_failed">Could not read the file: %1$s</string>
+    <string name="settings_battery">Unrestricted battery</string>
+    <string name="settings_battery_on">On: Android will not stop TunnelLock to save battery.</string>
+    <string name="settings_battery_off">Recommended for all-day use (especially on Samsung). Tap to allow.</string>
 </resources>

@@ -3,6 +3,10 @@ package app.tunnellock.probe
 import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
+import android.os.PowerManager
+import android.provider.Settings
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -34,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -54,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 class MainActivity : ComponentActivity() {
@@ -94,6 +100,12 @@ private fun ProbeScreen() {
         ProbeService.start(context)
     }
     val inWorkProfile = ProbeState.inSecureSpace(context)
+    val power = remember { context.getSystemService(PowerManager::class.java) }
+    var unrestricted by remember { mutableStateOf(power.isIgnoringBatteryOptimizations(context.packageName)) }
+    LifecycleResumeEffect(Unit) {
+        unrestricted = power.isIgnoringBatteryOptimizations(context.packageName)
+        onPauseOrDispose { }
+    }
 
     Scaffold(topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         LazyColumn(
@@ -122,6 +134,20 @@ private fun ProbeScreen() {
                 }
             }
             item { StatusCard(last, running) }
+            // Long tests on phones that put apps to sleep (Samsung especially).
+            item {
+                if (unrestricted) {
+                    Text(stringResource(R.string.battery_on), style = MaterialTheme.typography.bodySmall, color = Green)
+                } else {
+                    TextButton(onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
+                            )
+                        }.onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) } }
+                    }) { Text(stringResource(R.string.battery_off)) }
+                }
+            }
             item {
                 Text(
                     stringResource(R.string.counters, counters.online, counters.blocked, counters.leaks, counters.ipChanges, counters.direct),
