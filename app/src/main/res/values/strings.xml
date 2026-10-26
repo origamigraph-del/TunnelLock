@@ -52,7 +52,7 @@
     <string name="setup_step1">۱. «ساخت فضای امن» را بزنید و مراحل اندروید را تأیید کنید.</string>
     <string name="setup_step2">۲. TunnelLock داخل فضای امن (با آیکون کیف) خودکار باز می‌شود.</string>
     <string name="setup_step3">۳. در بخش سرورها، لینک V2Ray یا لینک اشتراک را اضافه کنید.</string>
-    <string name="setup_step4">۴. در بخش اپ‌ها، اپ‌هایی را که می‌خواهید محافظت شوند اضافه کنید.</string>
+    <string name="setup_step4">۴. اپ‌ها را از همین برنامهٔ بیرونی (بدون آیکون کیف) به فضای امن اضافه کنید.</string>
     <string name="setup_step5">۵. دکمه اتصال را بزنید.</string>
     <string name="setup_create">ساخت فضای امن</string>
     <string name="setup_open">باز کردن فضای امن</string>
@@ -105,7 +105,7 @@
     <string name="dialog_delete">حذف</string>
 
     <!-- Apps -->
-    <string name="apps_hint">هر اپی که در فضای امن باشد محافظت‌شده است: فقط از طریق VPN اینترنت دارد و اگر اتصال قطع شود اینترنتش قطع می‌شود.</string>
+    <string name="apps_hint">هر اپی که در فضای امن باشد محافظت‌شده است: فقط از طریق VPN اینترنت دارد و اگر اتصال قطع شود اینترنتش قطع می‌شود. اپ‌های جدید را از TunnelLock بیرونی (بدون آیکون کیف) انتخاب کنید.</string>
     <string name="apps_install_permission">برای افزودن اپ، اجازه «نصب برنامه‌های ناشناس» را برای TunnelLock روشن کنید.</string>
     <string name="apps_open_settings">باز کردن تنظیمات</string>
     <string name="apps_search">جستجوی اپ</string>
@@ -130,4 +130,33 @@
     <string name="settings_version">نسخه</string>
     <string name="settings_how_title">چطور کار می‌کند؟</string>
     <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر اتصال وسط کار قطع شود، اپ باز می‌ماند و فقط اینترنتش قطع است؛ با برگشتن اتصال دوباره کار می‌کند.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی خودتان قطع می‌کنید (و گزینهٔ «متوقف کردن اپ‌ها» روشن است)، اپ‌های محافظت‌شده باز نمی‌شوند تا دوباره وصل شوید.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
+    <string name="msg_subscription_updated_skipped">اشتراک «%1$s» به‌روز شد (%2$d سرور؛ %3$d مورد پشتیبانی نمی‌شود).</string>
+    <string name="msg_personal_app_missing">TunnelLock بیرون از فضای امن پیدا نشد.</string>
+    <string name="clone_title">افزودن اپ به فضای امن</string>
+    <string name="clone_hint">اندروید برای نصب هر اپ تأیید می‌خواهد؛ در پنجرهٔ نصب «نصب» را بزنید. این صفحه را تا پایان باز نگه دارید.</string>
+    <string name="clone_done">بستن</string>
+    <string name="clone_waiting">در صف</string>
+    <string name="clone_working">در حال کپی…</string>
+    <string name="clone_confirm">منتظر تأیید نصب</string>
+    <string name="clone_done_item">اضافه شد</string>
+    <string name="clone_failed">ناموفق: %1$s</string>
+    <string name="hub_intro">فضای امن آماده است. سرورها و اتصال داخل TunnelLock فضای امن (با آیکون کیف) هستند.</string>
+    <string name="hub_apps_title">افزودن اپ به فضای امن</string>
+    <string name="hub_apps_hint">اپ‌هایی را که باید فقط با VPN کار کنند انتخاب کنید و «افزودن» را بزنید. یک نسخهٔ جدا از آن‌ها در فضای امن نصب می‌شود.</string>
+    <string name="hub_add_selected">افزودن %1$d اپ به فضای امن</string>
+    <string name="hub_send_failed">فضای امن جواب نداد. یک بار TunnelLock داخل فضای امن را باز کنید و دوباره امتحان کنید.</string>
+    <string name="hub_in_space">در فضای امن هست</string>
+    <string name="hub_system_app">اپ سیستمی</string>
+    <string name="apps_pending">%1$d اپ منتظر افزودن است.</string>
+    <string name="apps_continue">ادامه</string>
+    <string name="apps_add_from_phone">افزودن اپ از گوشی</string>
+    <string name="apps_remove_confirm">«%1$s» از فضای امن حذف شود؟</string>
+    <string name="sub_usage_of">مصرف %1$s از %2$s</string>
+    <string name="sub_usage_unlimited">مصرف %1$s (نامحدود)</string>
+    <string name="sub_days_left">%1$d روز مانده</string>
+    <string name="settings_logs">گزارش‌ها (لاگ)</string>
+    <string name="settings_logs_desc">برای عیب‌یابی؛ می‌توانید کپی کنید و بفرستید.</string>
+    <string name="logs_empty">هنوز گزارشی نیست.</string>
+    <string name="logs_copy">کپی</string>
+    <string name="logs_close">بستن</string>
 </resources>

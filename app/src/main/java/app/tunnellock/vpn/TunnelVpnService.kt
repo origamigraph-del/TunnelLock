@@ -17,8 +17,10 @@ import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
+import app.tunnellock.data.AppLog
 import app.tunnellock.data.AppStore
 import app.tunnellock.strict.AppGate
+import app.tunnellock.strict.Policy
 import app.tunnellock.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -123,6 +125,7 @@ class TunnelVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         store = (application as TunnelLockApp).store
+        scope.launch { Policy.ensurePolicies(this@TunnelVpnService) }
         scope.launch { for (command in commands) handle(command) }
         ContextCompat.registerReceiver(
             this,
@@ -234,7 +237,7 @@ class TunnelVpnService : VpnService() {
             val started = runCatching { XrayCore.start(this, config, fd) }
             if (started.isFailure) {
                 // A broken config will not fix itself by retrying.
-                Log.e(TAG, "core start failed", started.exceptionOrNull())
+                AppLog.w(TAG, "core start failed", started.exceptionOrNull())
                 XrayCore.stop()
                 enterGuard(
                     getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()),
@@ -266,7 +269,11 @@ class TunnelVpnService : VpnService() {
         }
     }
 
-    private fun checkConnectivity(): Boolean = TEST_URLS.any { XrayCore.measureDelay(it) >= 0 }
+    private fun checkConnectivity(): Boolean {
+        val ok = TEST_URLS.any { XrayCore.measureDelay(it) >= 0 }
+        if (!ok) AppLog.w(TAG, "health check through the tunnel failed")
+        return ok
+    }
 
     // ---- state changes --------------------------------------------------------
 
@@ -302,8 +309,13 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun setStatus(transform: (TunnelStatus) -> TunnelStatus) {
+        val before = TunnelState.status.value
         TunnelState.update(transform)
-        Notifications.update(this, TunnelState.status.value)
+        val after = TunnelState.status.value
+        if (before.phase != after.phase || before.error != after.error) {
+            AppLog.i(TAG, "${before.phase} -> ${after.phase}" + (after.error?.let { " ($it)" } ?: ""))
+        }
+        Notifications.update(this, after)
     }
 
     // ---- TUN ------------------------------------------------------------------

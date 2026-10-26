@@ -5,12 +5,13 @@ enum class Protocol(val label: String) {
     VMESS("VMess"),
     TROJAN("Trojan"),
     SHADOWSOCKS("Shadowsocks"),
+    HYSTERIA2("Hysteria2"),
     CUSTOM("Xray JSON"),
 }
 
 /** Transport and security settings shared by the V2Ray-family protocols. */
 data class StreamConfig(
-    /** tcp, ws, grpc, httpupgrade, xhttp, kcp */
+    /** tcp, ws, grpc, httpupgrade, xhttp, kcp, hysteria */
     val network: String = "tcp",
     /** none, tls, reality */
     val security: String = "none",
@@ -36,6 +37,8 @@ data class StreamConfig(
     val seed: String? = null,
     /** xhttp "extra" object as raw JSON. */
     val xhttpExtra: String? = null,
+    /** Hysteria2 "salamander" obfuscation password. */
+    val obfsPassword: String? = null,
 )
 
 data class ServerProfile(
@@ -43,7 +46,7 @@ data class ServerProfile(
     val protocol: Protocol,
     val address: String,
     val port: Int,
-    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks. */
+    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks, auth for Hysteria2. */
     val secret: String = "",
     /** Shadowsocks cipher, VMess security, or VLESS encryption. */
     val method: String? = null,
