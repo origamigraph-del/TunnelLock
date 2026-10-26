@@ -15,7 +15,11 @@
 
 ## نصب
 
-1. از صفحهٔ **Releases** همین ریپو، آخرین `TunnelLock-*.apk` را دانلود و نصب کنید.
+1. آخرین نسخه را مستقیم در مرورگر گوشی (با حساب GitHub واردشده) باز و نصب کنید:
+   - TunnelLock: https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelLock.apk
+   - TunnelProbe: https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelProbe.apk
+
+   این لینک‌ها همیشه جدیدترین نسخه را می‌دهند. برای آپدیت هم همین لینک را باز کنید.
 2. اپ را باز کنید و «ساخت فضای امن» را بزنید.
 3. TunnelLock داخل فضای امن (آیکون با نشان کیف) باز می‌شود:
    - **سرورها**: لینک `vless://`، `vmess://`، `trojan://` یا `ss://` را کپی کنید و «از کلیپ‌بورد» را بزنید. لینک اشتراک، QR و کانفیگ JSON کامل Xray هم پشتیبانی می‌شود.
@@ -24,7 +28,7 @@
 
 ## تست نشت با TunnelProbe
 
-در هر Release یک `TunnelProbe-*.apk` هم هست: اپ کوچکی برای اینکه خودتان ببینید ترافیک واقعاً قطع می‌شود یا نه.
+در هر Release یک `TunnelProbe.apk` هم هست: اپ کوچکی برای اینکه خودتان ببینید ترافیک واقعاً قطع می‌شود یا نه.
 
 1. TunnelProbe را نصب کنید و با TunnelLock بیرونی به فضای امن اضافه کنید.
 2. نسخهٔ داخل فضای امن را باز کنید، VPN را وصل کنید و «شروع تست» را بزنید. هر چند ثانیه چهار مسیر جدا را امتحان می‌کند: HTTPS با IP، HTTPS با DNS، ipify (IPv4/IPv6) و UDP (STUN).
