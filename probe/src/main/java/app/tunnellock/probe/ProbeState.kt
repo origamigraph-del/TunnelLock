@@ -60,6 +60,8 @@ object ProbeState {
     fun homeCountry(context: Context) = prefs(context).getString("home", "IR").orEmpty()
     fun setHomeCountry(context: Context, value: String) = prefs(context).edit().putString("home", value.trim().uppercase()).apply()
     fun realIp(context: Context) = prefs(context).getString("realIp", "").orEmpty()
+    fun autoSend(context: Context) = prefs(context).getBoolean("autoSend", true)
+    fun setAutoSend(context: Context, value: Boolean) = prefs(context).edit().putBoolean("autoSend", value).apply()
     fun setRealIp(context: Context, value: String) = prefs(context).edit().putString("realIp", value.trim()).apply()
 
     // ---- log -----------------------------------------------------------------
@@ -102,6 +104,23 @@ object ProbeState {
     }
 
     fun text(lastLines: Int = 600): String = _lines.value.takeLast(lastLines).joinToString("\n")
+
+    /** The lines of the last test session (from its "probe started" line). */
+    fun sessionText(): String {
+        val lines = _lines.value
+        val start = lines.indexOfLast { it.contains("-- probe started") }.coerceAtLeast(0)
+        return lines.drop(start).joinToString("\n")
+    }
+
+    /** Sends [text] to the developer in the background and notes the outcome in the log. */
+    fun sendInBackground(context: Context, text: String) {
+        val app = context.applicationContext
+        Thread {
+            ProbeReport.send(app, text)
+                .onSuccess { log(app, "-- log sent to the developer") }
+                .onFailure { log(app, "-- sending the log failed: ${it.message}") }
+        }.start()
+    }
 
     // ---- one round -----------------------------------------------------------
 

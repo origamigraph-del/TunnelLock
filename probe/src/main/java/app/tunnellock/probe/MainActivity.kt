@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -41,6 +42,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -85,6 +87,7 @@ private fun ProbeScreen() {
     var interval by remember { mutableIntStateOf(ProbeState.intervalSeconds(context)) }
     var home by remember { mutableStateOf(ProbeState.homeCountry(context)) }
     var realIp by remember { mutableStateOf(ProbeState.realIp(context)) }
+    var autoSend by remember { mutableStateOf(ProbeState.autoSend(context)) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         ProbeService.start(context)
     }
@@ -130,6 +133,23 @@ private fun ProbeScreen() {
                         clipboard.setPrimaryClip(ClipData.newPlainText("TunnelProbe log", ProbeState.text()))
                     }) { Text(stringResource(R.string.action_copy)) }
                     OutlinedButton(onClick = { ProbeState.clear(context) }) { Text(stringResource(R.string.action_clear)) }
+                }
+            }
+            if (ProbeReport.available) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(onClick = { ProbeState.sendInBackground(context, ProbeState.text()) }) {
+                            Text(stringResource(R.string.action_send))
+                        }
+                        Switch(
+                            checked = autoSend,
+                            onCheckedChange = {
+                                autoSend = it
+                                ProbeState.setAutoSend(context, it)
+                            },
+                        )
+                        Text(stringResource(R.string.auto_send), style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
             item {
