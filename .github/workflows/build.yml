@@ -45,6 +45,18 @@ jobs:
         if: env.SIGNING_PASSWORD == ''
         run: echo "::warning::SIGNING_PASSWORD secret is not set. The APK is debug-signed and will not be published."
 
+      - name: Check log token
+        if: env.LOG_TOKEN != ''
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${LOG_TOKEN//[[:space:]]/}" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/1")
+          if [ "$code" = "200" ]; then
+            echo "::notice title=Log sending::LOG_TOKEN can read issue #1; the apps can send logs."
+          else
+            echo "::warning title=Log sending::LOG_TOKEN was rejected (HTTP $code); log sending will not work."
+          fi
+
       - name: Test and build
         run: |
           set -o pipefail
