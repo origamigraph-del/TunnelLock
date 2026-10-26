@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
         System.setProperty("http.keepAlive", "false")
         ProbeState.createChannels(this)
         ProbeState.load(this)
+        ProbeState.flushOutbox(this)
         setContent {
             MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()) {
                 ProbeScreen()
