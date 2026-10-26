@@ -128,6 +128,9 @@ enum class Verdict {
 
     /** Got out through an exit IP never seen before: a server change, or a leak. */
     IP_CHANGED,
+
+    /** Got out directly, but this copy runs outside the secure space, where that is normal. */
+    DIRECT,
 }
 
 data class Classification(val verdict: Verdict, val reason: String?, val baseline: Set<String>)
@@ -140,12 +143,20 @@ object ProbeLogic {
      * [baseline] holds the exit IPs seen while online; it starts with the first
      * successful round and grows only with rounds that share an IP with it.
      */
-    fun classify(results: List<CheckResult>, baseline: Set<String>, homeCountry: String, realIp: String): Classification {
+    fun classify(
+        results: List<CheckResult>,
+        baseline: Set<String>,
+        homeCountry: String,
+        realIp: String,
+        inSecureSpace: Boolean = true,
+    ): Classification {
         val reached = results.filter { it.reached }
         val ips = reached.mapNotNull { it.ip }.toSet()
         val home = homeCountry.trim()
         val real = realIp.trim()
         return when {
+            !inSecureSpace && reached.isNotEmpty() ->
+                Classification(Verdict.DIRECT, "outside the secure space there is no VPN; this is the real exit", baseline)
             home.isNotEmpty() && reached.any { it.country.equals(home, ignoreCase = true) } ->
                 Classification(Verdict.LEAK, "exit country is $home", baseline)
             real.isNotEmpty() && real in ips ->
