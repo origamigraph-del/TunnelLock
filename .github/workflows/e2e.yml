@@ -94,24 +94,18 @@ jobs:
           accel=$("$ANDROID_HOME/emulator/emulator" -accel-check 2>&1 | tr '\n' ' ')
           echo "::notice title=Emulator host::$(nproc) CPUs, $(free -g | awk '/Mem/{print $2}') GB RAM; $accel"
 
-      - name: Run the test on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          target: google_apis
-          arch: x86_64
-          ram-size: 3072M
-          cores: 2
-          disk-size: 6000M
-          disable-animations: true
-          emulator-boot-timeout: 1200
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
-          script: bash e2e/run.sh
+      - name: Start the emulator
+        run: e2e/emulator.sh
+
+      - name: Run the test
+        run: |
+          export PATH="$ANDROID_HOME/platform-tools:$PATH"
+          bash e2e/run.sh
 
       - name: Server logs
         if: always()
         run: |
-          for f in xray.log openvpn.log; do
+          for f in xray.log openvpn.log emulator.log; do
             [ -f "e2e/out/$f" ] && echo "::notice title=$f::$(sudo tail -25 "e2e/out/$f" | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
           done
           true
