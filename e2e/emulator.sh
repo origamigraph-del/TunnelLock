@@ -29,7 +29,7 @@ if [ ! -f "$ANDROID_AVD_HOME/e2e.avd/config.ini" ]; then
     exit 1
 fi
 # A bigger data partition: two users and two apps with native libraries.
-printf 'disk.dataPartition.size=6G\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >>"$ANDROID_AVD_HOME/e2e.avd/config.ini"
+printf 'disk.dataPartition.size=4G\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >>"$ANDROID_AVD_HOME/e2e.avd/config.ini"
 
 nohup "$SDK/emulator/emulator" -avd e2e -no-window -no-audio -no-boot-anim -no-snapshot \
     -gpu swiftshader_indirect -camera-back none -camera-front none -accel on \

@@ -25,6 +25,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
+      # The emulator's data partition needs several GB; the runner's disk is mostly
+      # preinstalled tools this job does not use.
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /opt/hostedtoolcache/CodeQL /usr/local/share/boost /usr/share/swift
+          echo "::notice title=Disk::$(df -h / | awk 'NR==2 {print $4 " free of " $2}')"
+
       - uses: actions/checkout@v5
 
       - uses: actions/setup-java@v5
