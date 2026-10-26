@@ -1,8 +1,6 @@
 package app.tunnellock.ui
 
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.pm.CrossProfileApps
 import android.os.UserHandle
@@ -60,7 +58,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.tunnellock.R
-import app.tunnellock.data.AppLog
 import app.tunnellock.strict.PhoneApp
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
@@ -193,7 +190,8 @@ private fun PersonalHub(space: UserHandle) {
         apps = withContext(Dispatchers.IO) { PhoneApps.list(context) }
     }
     val sendFailed = stringResource(R.string.hub_send_failed)
-    val logsCopied = stringResource(R.string.hub_logs_copied)
+    var showLogs by remember { mutableStateOf(false) }
+    if (showLogs) LogsDialog(onDismiss = { showLogs = false })
 
     Scaffold(
         topBar = {
@@ -201,11 +199,7 @@ private fun PersonalHub(space: UserHandle) {
                 title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     // The personal side has its own log (the hand-over happens here).
-                    TextButton(onClick = {
-                        val clipboard = context.getSystemService(ClipboardManager::class.java)
-                        clipboard.setPrimaryClip(ClipData.newPlainText("TunnelLock log", AppLog.text()))
-                        scope.launch { snackbar.showSnackbar(logsCopied) }
-                    }) { Text(stringResource(R.string.settings_logs)) }
+                    TextButton(onClick = { showLogs = true }) { Text(stringResource(R.string.settings_logs)) }
                 },
             )
         },
