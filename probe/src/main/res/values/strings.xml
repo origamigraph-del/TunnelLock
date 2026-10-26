@@ -27,4 +27,6 @@
     <string name="action_send">ارسال گزارش برای توسعه‌دهنده</string>
     <string name="auto_send">ارسال خودکار بعد از هر تست</string>
     <string name="verdict_direct">مستقیم، بدون VPN (در پروفایل شخصی طبیعی است)</string>
+    <string name="battery_off">برای تست طولانی: محدودیت باتری را بردارید</string>
+    <string name="battery_on">محدودیت باتری برداشته شده ✓</string>
 </resources>

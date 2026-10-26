@@ -200,4 +200,7 @@
     <string name="msg_ovpn_imported">سرور OpenVPN «%1$s» اضافه شد.</string>
     <string name="msg_login_saved">ورود «%1$s» ذخیره شد.</string>
     <string name="msg_file_read_failed">خواندن فایل ناموفق بود: %1$s</string>
+    <string name="settings_battery">بدون محدودیت باتری</string>
+    <string name="settings_battery_on">فعال است: اندروید TunnelLock را برای صرفه‌جویی در باتری متوقف نمی‌کند.</string>
+    <string name="settings_battery_off">برای کار پیوسته در طول روز (به‌خصوص روی سامسونگ) توصیه می‌شود. بزنید تا اجازه بدهید.</string>
 </resources>
