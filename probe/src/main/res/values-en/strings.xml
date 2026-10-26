@@ -23,4 +23,6 @@
     <string name="verdict_ip_changed">Exit IP changed</string>
     <string name="verdict_idle">Stopped</string>
     <string name="how_to">How to test:\n1. Add this app to the secure space with the outer TunnelLock, then open the copy inside the secure space.\n2. Connect the VPN and tap Start. You should see Online with the server\'s IP and country.\n3. Now break things: stop the server, switch Wi-Fi and mobile data, toggle airplane mode, or close TunnelLock.\n4. The whole time you should only see Blocked. Leak means traffic left with your home IP.\n5. Tap Copy log and send it for troubleshooting.\n\nEvery round tries four separate paths: HTTPS without DNS, HTTPS with DNS, IPv4/IPv6 and UDP (STUN).</string>
+    <string name="action_send">Send log to developer</string>
+    <string name="auto_send">Send automatically after each test</string>
 </resources>

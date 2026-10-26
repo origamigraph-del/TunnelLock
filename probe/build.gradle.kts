@@ -10,6 +10,11 @@ plugins {
 val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() }
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
+// Lets the apps post their logs to the developer (GitHub issue #1 of this repo).
+// LOG_TOKEN is a repository secret: a fine-grained token limited to this repo's issues.
+val logToken = System.getenv("LOG_TOKEN")?.trim().orEmpty()
+val logRepo = System.getenv("GITHUB_REPOSITORY") ?: "origamigraph-del/TunnelLock"
+
 android {
     namespace = "app.tunnellock.probe"
     compileSdk = 36
@@ -20,6 +25,9 @@ android {
         targetSdk = 36
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
+        buildConfigField("String", "LOG_TOKEN", "\"$logToken\"")
+        buildConfigField("String", "LOG_REPO", "\"$logRepo\"")
+        buildConfigField("int", "LOG_ISSUE", "1")
     }
 
     signingConfigs {
@@ -45,7 +53,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
 }
 
 kotlin {
@@ -57,6 +68,7 @@ base {
 }
 
 dependencies {
+    implementation(project(":core"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

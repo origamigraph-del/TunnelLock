@@ -81,6 +81,8 @@ class ProbeService : Service() {
         runCatching { wakeLock?.release() }
         ProbeState.setRunning(false)
         ProbeState.log(this, "-- probe stopped")
+        // Each finished test goes to the developer on its own.
+        if (ProbeReport.available && ProbeState.autoSend(this)) ProbeState.sendInBackground(this, ProbeState.sessionText())
         super.onDestroy()
     }
 

@@ -15,6 +15,8 @@ env:
   XRAY_LIB_SHA256: e56ec3b06485fe7b37af26948673951edf719c50d6bbc618b8539045952adde4
   # Password of signing/release.jks (repository secret).
   SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+  # Token the apps use to post their logs to issue #1 (repository secret, optional).
+  LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
   # SHA-256 of the certificate in signing/release.jks. Releases must carry exactly this
   # signature, otherwise they cannot update the installed app.
   RELEASE_CERT_SHA256: 5e5cb12b9e9aca85bc7c05843f794dac744ccb0c2b39b9f2eba8dfce6b739eed

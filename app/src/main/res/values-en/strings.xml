@@ -144,9 +144,13 @@
     <string name="sub_usage_unlimited">%1$s used (unlimited)</string>
     <string name="sub_days_left">%1$d days left</string>
     <string name="settings_logs">Logs</string>
-    <string name="settings_logs_desc">For troubleshooting; you can copy and send them.</string>
+    <string name="settings_logs_desc">For troubleshooting; send it straight to the developer or copy it.</string>
     <string name="logs_empty">No log entries yet.</string>
     <string name="logs_copy">Copy</string>
     <string name="logs_close">Close</string>
     <string name="hub_logs_copied">Log copied.</string>
+    <string name="logs_send">Send to developer</string>
+    <string name="logs_sending">Sending…</string>
+    <string name="logs_sent">Log sent.</string>
+    <string name="logs_send_failed">Sending failed: %1$s</string>
 </resources>

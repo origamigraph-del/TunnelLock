@@ -155,9 +155,13 @@
     <string name="sub_usage_unlimited">مصرف %1$s (نامحدود)</string>
     <string name="sub_days_left">%1$d روز مانده</string>
     <string name="settings_logs">گزارش‌ها (لاگ)</string>
-    <string name="settings_logs_desc">برای عیب‌یابی؛ می‌توانید کپی کنید و بفرستید.</string>
+    <string name="settings_logs_desc">برای عیب‌یابی؛ می‌توانید مستقیم برای توسعه‌دهنده بفرستید یا کپی کنید.</string>
     <string name="logs_empty">هنوز گزارشی نیست.</string>
     <string name="logs_copy">کپی</string>
     <string name="logs_close">بستن</string>
     <string name="hub_logs_copied">گزارش کپی شد.</string>
+    <string name="logs_send">ارسال برای توسعه‌دهنده</string>
+    <string name="logs_sending">در حال ارسال…</string>
+    <string name="logs_sent">گزارش ارسال شد.</string>
+    <string name="logs_send_failed">ارسال ناموفق بود: %1$s</string>
 </resources>
