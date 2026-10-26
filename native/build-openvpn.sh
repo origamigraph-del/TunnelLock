@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the OpenVPN 2 client for Android (arm64-v8a, armeabi-v7a) as
+# Builds the OpenVPN 2 client for Android (arm64-v8a, armeabi-v7a, and x86_64
+# for the emulator tests) as
 # libovpnexec.so: an executable with a library name, so Android unpacks it into
 # the app's native library directory, the only place an app may run programs from.
 #
@@ -88,7 +89,7 @@ fi
 export ANDROID_NDK_ROOT=$NDK
 export PATH="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 
-for ABI in arm64-v8a armeabi-v7a; do
+for ABI in arm64-v8a armeabi-v7a x86_64; do
     case $ABI in
         arm64-v8a)
             HOST=aarch64-linux-android
@@ -102,6 +103,12 @@ for ABI in arm64-v8a armeabi-v7a; do
             SSL_TARGET=android-arm
             # ics-openvpn builds LZO without optimisation on 32-bit ARM.
             LZO_OPT=-O0
+            ;;
+        x86_64)
+            HOST=x86_64-linux-android
+            CLANG=x86_64-linux-android$API-clang
+            SSL_TARGET=android-x86_64
+            LZO_OPT=-O2
             ;;
     esac
     PREFIX=$WORK/prefix/$ABI
