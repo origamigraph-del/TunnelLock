@@ -9,6 +9,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.UserManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +21,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-data class Counters(val online: Int = 0, val blocked: Int = 0, val leaks: Int = 0, val ipChanges: Int = 0)
+data class Counters(val online: Int = 0, val blocked: Int = 0, val leaks: Int = 0, val ipChanges: Int = 0, val direct: Int = 0)
 
 data class LastRound(val verdict: Verdict, val summary: String, val time: Long)
 
@@ -126,7 +128,7 @@ object ProbeState {
 
     @Synchronized
     fun record(context: Context, results: List<CheckResult>) {
-        val c = ProbeLogic.classify(results, baseline, homeCountry(context), realIp(context))
+        val c = ProbeLogic.classify(results, baseline, homeCountry(context), realIp(context), inSecureSpace(context))
         baseline = c.baseline
         val network = networkLabel(context)
         val details = results.joinToString(" | ") { r ->
@@ -141,6 +143,7 @@ object ProbeState {
             Verdict.BLOCKED -> "BLOCKED"
             Verdict.LEAK -> "LEAK!! "
             Verdict.IP_CHANGED -> "NEW-IP "
+            Verdict.DIRECT -> "DIRECT "
         }
         if (previousVerdict != null && previousVerdict != c.verdict) {
             log(context, "== $previousVerdict -> ${c.verdict}")
@@ -153,6 +156,7 @@ object ProbeState {
                 Verdict.BLOCKED -> it.copy(blocked = it.blocked + 1)
                 Verdict.LEAK -> it.copy(leaks = it.leaks + 1)
                 Verdict.IP_CHANGED -> it.copy(ipChanges = it.ipChanges + 1)
+                Verdict.DIRECT -> it.copy(direct = it.direct + 1)
             }
         }
         val summary = when (c.verdict) {
@@ -164,6 +168,14 @@ object ProbeState {
     }
 
     /** What the app's own default network is: VPN, Wi-Fi, cellular, or none (blocked). */
+    /** True in the work profile (the secure space), where every exit must be the VPN. */
+    fun inSecureSpace(context: Context): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) {
+            context.getSystemService(UserManager::class.java).isManagedProfile
+        } else {
+            android.os.Process.myUid() / 100_000 != 0
+        }
+
     private fun networkLabel(context: Context): String {
         val cm = context.getSystemService(ConnectivityManager::class.java)
         val network = cm.activeNetwork ?: return "none"

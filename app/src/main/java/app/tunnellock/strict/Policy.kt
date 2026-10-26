@@ -82,6 +82,8 @@ object Policy {
             PackageManager.DONT_KILL_APP,
         )
         if (!isLockdownActive(context)) enforceLockdown(context)
+        // Older versions paused the leak-test tool too; let it run again.
+        runCatching { dpm.setPackagesSuspended(admin, arrayOf(PROBE_PACKAGE), false) }
     }
 
     /**
@@ -145,10 +147,14 @@ object Policy {
     private const val KEY_SYSTEM_APPS = "addedSystemApps"
 
     fun setSuspended(context: Context, packages: List<String>, suspended: Boolean) {
-        if (packages.isEmpty() || !isProfileOwner(context)) return
-        runCatching { dpm(context).setPackagesSuspended(admin(context), packages.toTypedArray(), suspended) }
+        // The leak-test tool keeps running (and logging) while disconnected; its traffic is still blocked.
+        val targets = if (suspended) packages - PROBE_PACKAGE else packages
+        if (targets.isEmpty() || !isProfileOwner(context)) return
+        runCatching { dpm(context).setPackagesSuspended(admin(context), targets.toTypedArray(), suspended) }
             .onFailure { Log.e(TAG, "setPackagesSuspended failed", it) }
     }
+
+    private const val PROBE_PACKAGE = "app.tunnellock.probe"
 
     fun setAllSuspended(context: Context, suspended: Boolean) {
         if (!isProfileOwner(context)) return

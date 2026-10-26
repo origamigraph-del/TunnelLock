@@ -5,7 +5,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.os.Build
 import android.os.Bundle
-import android.os.UserManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -91,7 +90,7 @@ private fun ProbeScreen() {
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         ProbeService.start(context)
     }
-    val inWorkProfile = Build.VERSION.SDK_INT >= 30 && context.getSystemService(UserManager::class.java).isManagedProfile
+    val inWorkProfile = ProbeState.inSecureSpace(context)
 
     Scaffold(topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) }) }) { padding ->
         LazyColumn(
@@ -102,16 +101,27 @@ private fun ProbeScreen() {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                Text(
-                    stringResource(if (inWorkProfile) R.string.profile_work else R.string.profile_personal),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (inWorkProfile) Green else Amber,
-                )
+                if (inWorkProfile) {
+                    Text(stringResource(R.string.profile_work), style = MaterialTheme.typography.labelLarge, color = Green)
+                } else {
+                    // The most common mistake: testing with the unprotected copy.
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Amber.copy(alpha = 0.18f)),
+                    ) {
+                        Text(
+                            stringResource(R.string.profile_personal),
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
             }
             item { StatusCard(last, running) }
             item {
                 Text(
-                    stringResource(R.string.counters, counters.online, counters.blocked, counters.leaks, counters.ipChanges),
+                    stringResource(R.string.counters, counters.online, counters.blocked, counters.leaks, counters.ipChanges, counters.direct),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -210,7 +220,7 @@ private fun ProbeScreen() {
                         lineHeight = 14.sp,
                         color = when {
                             "LEAK" in line -> Red
-                            "NEW-IP" in line -> Amber
+                            "NEW-IP" in line || "DIRECT" in line -> Amber
                             "BLOCKED" in line -> Grey
                             line.contains(" OK ") -> Green
                             else -> MaterialTheme.colorScheme.onSurface
@@ -230,6 +240,7 @@ private fun StatusCard(last: LastRound?, running: Boolean) {
         Verdict.BLOCKED -> stringResource(R.string.verdict_blocked) to Grey
         Verdict.LEAK -> stringResource(R.string.verdict_leak) to Red
         Verdict.IP_CHANGED -> stringResource(R.string.verdict_ip_changed) to Amber
+        Verdict.DIRECT -> stringResource(R.string.verdict_direct) to Amber
         null -> stringResource(if (running) R.string.status_starting else R.string.verdict_idle) to Grey
     }
     Card(

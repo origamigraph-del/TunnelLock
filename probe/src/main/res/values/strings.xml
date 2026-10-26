@@ -12,8 +12,8 @@
     <string name="action_clear">پاک کردن</string>
     <string name="action_reset_baseline">فراموش کردن IP خروجی فعلی</string>
     <string name="profile_work">این نسخه داخل فضای امن (پروفایل کاری) است ✓</string>
-    <string name="profile_personal">این نسخه در پروفایل شخصی است (بیرون از فضای امن، بدون محافظت)</string>
-    <string name="counters">متصل: %1$d · مسدود: %2$d · نشت: %3$d · IP جدید: %4$d</string>
+    <string name="profile_personal">⚠️ این نسخه بیرون از فضای امن است، پس اینجا VPN ندارد و IP واقعی شما دیده می‌شود (طبیعی است). برای تست، TunnelProbe با آیکون کیف را باز کنید.</string>
+    <string name="counters">متصل: %1$d · مسدود: %2$d · نشت: %3$d · IP جدید: %4$d · مستقیم: %5$d</string>
     <string name="interval">فاصلهٔ تست</string>
     <string name="home_country">کشور شما</string>
     <string name="real_ip">IP واقعی شما (اختیاری)</string>
@@ -26,4 +26,5 @@
     <string name="how_to">روش تست:\n۱. این اپ را با TunnelLock (بیرونی) به فضای امن اضافه کنید و نسخهٔ داخل فضای امن را باز کنید.\n۲. VPN را وصل کنید و «شروع تست» را بزنید. باید «متصل» با IP و کشور سرور را ببینید.\n۳. حالا قطع کنید: سرور را خاموش کنید، Wi-Fi و دیتا را عوض کنید، حالت هواپیما بزنید، یا TunnelLock را ببندید.\n۴. در تمام این مدت فقط باید «مسدود» ببینید. «نشت» یعنی ترافیک با IP ایران خارج شده است.\n۵. «کپی گزارش» را بزنید و برای عیب‌یابی بفرستید.\n\nهر دور چهار مسیر جدا را امتحان می‌کند: HTTPS بدون DNS، HTTPS با DNS، IPv4/IPv6 و UDP (STUN).</string>
     <string name="action_send">ارسال گزارش برای توسعه‌دهنده</string>
     <string name="auto_send">ارسال خودکار بعد از هر تست</string>
+    <string name="verdict_direct">مستقیم، بدون VPN (در پروفایل شخصی طبیعی است)</string>
 </resources>
