@@ -121,7 +121,7 @@ check_blocked() { # <name> <from>
     local v total bad
     v=$(verdicts "$2" 1)
     total=$(echo "$v" | grep -c . || true)
-    bad=$(echo "$v" | grep -vc '^BLOCKED$' || true)
+    bad=$(echo "$v" | grep . | grep -vc '^BLOCKED$' || true)
     if [ "$total" -ge 1 ] && [ "$bad" -eq 0 ]; then
         pass "$1" "all $total probe rounds were BLOCKED"
     else
@@ -136,7 +136,7 @@ check_blocked_until_connected() { # <name> <probe from> <app from>
     until=$(applog | tail -n +"$(($3 + 1))" | grep -m1 -- "-> CONNECTED" | awk '{print $2}')
     v=$(probelog | tail -n +"$(($2 + 1))" | awk -v until="$until" '$2 != "==" && $2 != "--" && (until == "" || $1 < until) {print $2}' | tail -n +2)
     total=$(echo "$v" | grep -c . || true)
-    bad=$(echo "$v" | grep -vc '^BLOCKED$' || true)
+    bad=$(echo "$v" | grep . | grep -vc '^BLOCKED$' || true)
     if [ "$total" -ge 1 ] && [ "$bad" -eq 0 ]; then
         pass "$1" "all $total probe rounds were BLOCKED${until:+ until TunnelLock came back at $until}"
     else
@@ -250,7 +250,7 @@ if wait_phase GUARDING "$from" 120 && applog | tail -n +"$((from + 1))" | grep -
 else
     fail "Wrong password" "no login error within 120 s"
 fi
-sleep 15
+sleep 45
 check_blocked "Wrong password blocks" "$m"
 
 # ---- report ---------------------------------------------------------------------------
