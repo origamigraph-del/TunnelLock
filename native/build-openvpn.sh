@@ -14,7 +14,33 @@
 #
 # Usage: native/build-openvpn.sh <android-ndk-dir> <output-dir>
 # Output: <output-dir>/<abi>/libovpnexec.so
-set -euo pipefail
+set -Eeuo pipefail
+
+# CI job logs are not always at hand, so every failure is also reported as an
+# annotation with the useful part of its log.
+ON_ERROR='echo "::error title=build-openvpn.sh::line $LINENO: $BASH_COMMAND failed"'
+trap "$ON_ERROR" ERR
+
+step() { # <title> <log file> <command...>
+    local title=$1 log=$2 status
+    shift 2
+    # A subshell, so "set -e" stops at the first failing command (it is ignored
+    # inside "if" and "||" tests) and a "cd" stays inside the step.
+    trap - ERR
+    set +e
+    (set -e; "$@") >"$log" 2>&1
+    status=$?
+    set -e
+    trap "$ON_ERROR" ERR
+    if [ "$status" -ne 0 ]; then
+        local excerpt
+        excerpt=$({ grep -E -i -m 30 'error|fatal|undefined|not found|No such file' "$log" || true
+            echo "--- last lines ---"
+            tail -n 25 "$log"; } | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+        echo "::error title=$title failed::$excerpt"
+        exit 1
+    fi
+}
 
 NDK=$(realpath "$1")
 OUT=$(realpath -m "$2")
@@ -54,7 +80,7 @@ if [ ! -d "$WORK/src/lzo" ]; then
     tar -xzf "$WORK/lzo.tar.gz" -C "$WORK/src/lzo" --strip-components=1
 fi
 if [ ! -x "$WORK/src/openvpn/configure" ]; then
-    (cd "$WORK/src/openvpn" && autoreconf -fi >/dev/null)
+    step "OpenVPN autoreconf" "$WORK/autoreconf.log" bash -c "cd '$WORK/src/openvpn' && autoreconf -fi"
 fi
 
 export ANDROID_NDK_ROOT=$NDK
@@ -81,32 +107,37 @@ for ABI in arm64-v8a armeabi-v7a; do
     rm -rf "$PREFIX" "$BUILD"
     mkdir -p "$PREFIX/lib" "$PREFIX/include" "$BUILD/openssl" "$BUILD/lzo" "$BUILD/openvpn"
 
-    echo "::group::$ABI: OpenSSL $OPENSSL_TAG"
+    echo "$ABI: OpenSSL $OPENSSL_TAG"
     # OpenSSL picks the NDK compiler for the target itself (CC must be plain clang).
-    (cd "$BUILD/openssl" \
-        && env -u CC "$WORK/src/openssl/Configure" "$SSL_TARGET" -D__ANDROID_API__=$API \
-            no-shared no-module no-tests --prefix="$PREFIX" --libdir=lib \
-        && make -j"$JOBS" build_libs \
-        && make install_dev) >"$BUILD/openssl.log" 2>&1 \
-        || { grep -E -B2 -A3 'error|Error' "$BUILD/openssl.log" | head -80; tail -20 "$BUILD/openssl.log"; exit 1; }
-    echo "::endgroup::"
+    build_openssl() {
+        cd "$BUILD/openssl"
+        env -u CC "$WORK/src/openssl/Configure" "$SSL_TARGET" -D__ANDROID_API__=$API \
+            no-shared no-module no-tests --prefix="$PREFIX" --libdir=lib
+        make -j"$JOBS" build_libs
+        make install_dev
+    }
+    step "OpenSSL $ABI" "$BUILD/openssl.log" build_openssl
 
-    echo "::group::$ABI: LZ4 and LZO"
-    "$CLANG" -O2 -fPIC -c "$WORK/src/lz4/lib/lz4.c" -o "$BUILD/lz4.o"
-    llvm-ar rcs "$PREFIX/lib/liblz4.a" "$BUILD/lz4.o"
-    cp "$WORK/src/lz4/lib/lz4.h" "$PREFIX/include/"
-    for source in "$WORK"/src/lzo/src/*.c; do
-        "$CLANG" $LZO_OPT -fPIC -I"$WORK/src/lzo/include" -I"$WORK/src/lzo/src" \
-            -c "$source" -o "$BUILD/lzo/$(basename "${source%.c}").o"
-    done
-    llvm-ar rcs "$PREFIX/lib/liblzo2.a" "$BUILD"/lzo/*.o
-    cp -r "$WORK/src/lzo/include/lzo" "$PREFIX/include/"
-    echo "::endgroup::"
+    echo "$ABI: LZ4 and LZO"
+    build_compression() {
+        "$CLANG" -O2 -fPIC -c "$WORK/src/lz4/lib/lz4.c" -o "$BUILD/lz4.o"
+        llvm-ar rcs "$PREFIX/lib/liblz4.a" "$BUILD/lz4.o"
+        cp "$WORK/src/lz4/lib/lz4.h" "$PREFIX/include/"
+        for source in "$WORK"/src/lzo/src/*.c; do
+            "$CLANG" $LZO_OPT -fPIC -I"$WORK/src/lzo/include" -I"$WORK/src/lzo/src" \
+                -c "$source" -o "$BUILD/lzo/$(basename "${source%.c}").o"
+        done
+        llvm-ar rcs "$PREFIX/lib/liblzo2.a" "$BUILD"/lzo/*.o
+        cp -r "$WORK/src/lzo/include/lzo" "$PREFIX/include/"
+    }
+    step "LZ4/LZO $ABI" "$BUILD/compression.log" build_compression
 
-    echo "::group::$ABI: OpenVPN $OPENVPN_TAG"
+    echo "$ABI: OpenVPN $OPENVPN_TAG"
     # pkg-config only sees our prefix, never the build machine's libraries.
     # libcap-ng is required for Linux hosts but unused on Android: dummy flags pass the check.
-    (cd "$BUILD/openvpn" && PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" PKG_CONFIG_PATH="" \
+    configure_openvpn() {
+        cd "$BUILD/openvpn"
+        PKG_CONFIG_LIBDIR="$PREFIX/lib/pkgconfig" PKG_CONFIG_PATH="" \
         "$WORK/src/openvpn/configure" --host="$HOST" \
         CC="$CLANG" AR=llvm-ar RANLIB=llvm-ranlib STRIP=llvm-strip \
         CFLAGS="-O2" CPPFLAGS="-I$PREFIX/include" LDFLAGS="-L$PREFIX/lib" \
@@ -115,8 +146,9 @@ for ABI in arm64-v8a armeabi-v7a; do
         LZ4_CFLAGS="-I$PREFIX/include" LZ4_LIBS="-L$PREFIX/lib -llz4" \
         LIBCAPNG_CFLAGS="-I$PREFIX/include" LIBCAPNG_LIBS="-L$PREFIX/lib" \
         --with-crypto-library=openssl --disable-dco --disable-plugins \
-        --disable-plugin-auth-pam --disable-plugin-down-root --disable-unit-tests \
-        >configure.log 2>&1) || { tail -60 "$BUILD/openvpn/configure.log"; exit 1; }
+        --disable-plugin-auth-pam --disable-plugin-down-root --disable-unit-tests
+    }
+    step "OpenVPN configure $ABI" "$BUILD/configure.log" configure_openvpn
 
     config="$BUILD/openvpn/config.h"
     sed -i \
@@ -130,12 +162,13 @@ for ABI in arm64-v8a armeabi-v7a; do
         exit 1
     fi
 
-    make -C "$BUILD/openvpn" config-version.h >/dev/null
-    make -C "$BUILD/openvpn/include" >/dev/null
-    make -C "$BUILD/openvpn/src/compat" -j"$JOBS" >/dev/null
-    make -C "$BUILD/openvpn/src/openvpn" -j"$JOBS" openvpn >"$BUILD/openvpn/make.log" 2>&1 \
-        || { grep -E -B2 -A3 'error' "$BUILD/openvpn/make.log" | head -80; exit 1; }
-    echo "::endgroup::"
+    make_openvpn() {
+        make -C "$BUILD/openvpn" config-version.h
+        make -C "$BUILD/openvpn/include"
+        make -C "$BUILD/openvpn/src/compat" -j"$JOBS"
+        make -C "$BUILD/openvpn/src/openvpn" -j"$JOBS" openvpn
+    }
+    step "OpenVPN make $ABI" "$BUILD/make.log" make_openvpn
 
     mkdir -p "$OUT/$ABI"
     llvm-strip --strip-unneeded -o "$OUT/$ABI/libovpnexec.so" "$BUILD/openvpn/src/openvpn/openvpn"
