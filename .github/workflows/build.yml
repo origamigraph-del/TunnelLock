@@ -46,7 +46,7 @@ jobs:
       - name: Test and build
         run: |
           set -o pipefail
-          ./gradlew --no-daemon :core:test :app:assembleRelease 2>&1 | tee build.log
+          ./gradlew --no-daemon :core:test :app:assembleRelease :probe:assembleRelease 2>&1 | tee build.log
 
       - name: Report build errors
         if: failure()
@@ -56,28 +56,32 @@ jobs:
             | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')
           echo "::error title=Gradle build failed::${details:-see the Test and build step log}"
 
-      - name: Check APK signature
+      - name: Check APK signatures
         id: signature
         run: |
-          apk=$(ls app/build/outputs/apk/release/*.apk)
           apksigner=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          certs=$("$apksigner" verify --print-certs "$apk" 2>&1 || true)
-          digest=$(echo "$certs" | grep -m1 -oiE 'certificate SHA-256 digest: [0-9a-f]{64}' | awk '{print tolower($NF)}')
-          echo "::notice title=APK signer::${digest:-$(echo "$certs" | head -5 | sed ':a;N;$!ba;s/\n/%0A/g')}"
-          if [ "$digest" = "$RELEASE_CERT_SHA256" ]; then
-            echo "release=true" >> "$GITHUB_OUTPUT"
-          elif [ -n "$SIGNING_PASSWORD" ]; then
-            echo "::error::APK is not signed with the release key."
-            exit 1
-          else
-            echo "release=false" >> "$GITHUB_OUTPUT"
-          fi
+          release=true
+          for apk in app/build/outputs/apk/release/*.apk probe/build/outputs/apk/release/*.apk; do
+            certs=$("$apksigner" verify --print-certs "$apk" 2>&1 || true)
+            digest=$(echo "$certs" | grep -m1 -oiE 'certificate SHA-256 digest: [0-9a-f]{64}' | awk '{print tolower($NF)}')
+            echo "::notice title=$(basename "$apk")::${digest:-$(echo "$certs" | head -5 | sed ':a;N;$!ba;s/\n/%0A/g')}"
+            if [ "$digest" != "$RELEASE_CERT_SHA256" ]; then
+              release=false
+              if [ -n "$SIGNING_PASSWORD" ]; then
+                echo "::error::$(basename "$apk") is not signed with the release key."
+                exit 1
+              fi
+            fi
+          done
+          echo "release=$release" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TunnelLock-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: TunnelLock-apks
+          path: |
+            app/build/outputs/apk/release/*.apk
+            probe/build/outputs/apk/release/*.apk
 
       - name: Publish pre-release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signature.outputs.release == 'true'
@@ -85,8 +89,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" app/build/outputs/apk/release/*.apk \
+          gh release create "$tag" app/build/outputs/apk/release/*.apk probe/build/outputs/apk/release/*.apk \
             --target "${GITHUB_SHA}" \
             --prerelease \
             --title "TunnelLock build ${GITHUB_RUN_NUMBER}" \
-            --notes "Automatic build from ${GITHUB_SHA::7}. Install the APK on your phone (it updates the installed app)."
+            --notes "Automatic build from ${GITHUB_SHA::7}. TunnelLock-*.apk is the app (installs as an update). TunnelProbe-*.apk is the leak-test tool."

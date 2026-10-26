@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "TunnelLock"
-include(":core", ":app")
+include(":core", ":app", ":probe")
