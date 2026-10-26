@@ -43,6 +43,9 @@ class ProbeService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // The channel must exist before the first notification: the service can be
+        // started (or restarted by Android) without the screen ever having been opened.
+        ProbeState.createChannels(this)
         showForeground(notification(getString(R.string.status_starting)))
         if (intent?.action == ACTION_STOP) {
             stopSelf()
@@ -51,7 +54,6 @@ class ProbeService : Service() {
         if (loop == null) {
             // Every probe request must open a new connection.
             System.setProperty("http.keepAlive", "false")
-            ProbeState.createChannels(this)
             ProbeState.load(this)
             ProbeState.setRunning(true)
             ProbeState.log(this, "-- probe started (${profileLabel()}, every ${ProbeState.intervalSeconds(this)}s)")
