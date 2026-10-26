@@ -3,6 +3,7 @@ package app.tunnellock.core.parser
 import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
 import app.tunnellock.core.model.StreamConfig
+import app.tunnellock.core.openvpn.OpenVpnConfig
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Base64
@@ -17,14 +18,15 @@ data class ParseReport(val servers: List<ParsedServer>, val skipped: Map<String,
 
 /**
  * Parses share links (vless://, vmess://, trojan://, ss://), full Xray JSON
- * configs, and subscription bodies into [ServerProfile]s.
+ * configs, OpenVPN .ovpn files and subscription bodies into [ServerProfile]s.
  */
 object LinkParser {
 
-    /** Parses a single link or a single Xray JSON object. */
+    /** Parses a single link, a single Xray JSON object, or a whole .ovpn file. */
     fun parse(text: String): ServerProfile {
         val input = text.trim()
         if (input.startsWith("{")) return parseCustomJson(input)
+        if (OpenVpnConfig.looksLikeOvpn(input)) return OpenVpnConfig.parse(input)
         val scheme = input.substringBefore("://", "").lowercase()
         return when (scheme) {
             "vless" -> parseVless(input)
@@ -51,6 +53,8 @@ object LinkParser {
     fun parseReport(text: String): ParseReport {
         val input = text.trim().removePrefix("\uFEFF")
         if (input.isEmpty()) return ParseReport(emptyList(), emptyMap())
+        // An .ovpn file is one server, not one per line.
+        if (OpenVpnConfig.looksLikeOvpn(input)) return ParseReport(listOf(ParsedServer(OpenVpnConfig.parse(input), input)), emptyMap())
         if (input.startsWith("[")) {
             val array = try {
                 JSONArray(input)
@@ -254,7 +258,7 @@ object LinkParser {
             protocol = Protocol.CUSTOM,
             address = address,
             port = port,
-            rawJson = j.toString(),
+            rawConfig = j.toString(),
         )
     }
 

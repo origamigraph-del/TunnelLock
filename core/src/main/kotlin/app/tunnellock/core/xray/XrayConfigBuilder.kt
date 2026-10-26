@@ -27,8 +27,10 @@ object XrayConfigBuilder {
     const val PROXY_TAG = "proxy"
     const val DNS_TAG = "dns-out"
 
-    fun build(profile: ServerProfile, options: CoreOptions = CoreOptions()): String =
-        if (profile.protocol == Protocol.CUSTOM) buildCustom(profile, options) else buildStandard(profile, options)
+    fun build(profile: ServerProfile, options: CoreOptions = CoreOptions()): String {
+        require(profile.protocol.isXray) { "${profile.protocol.label} does not run on Xray" }
+        return if (profile.protocol == Protocol.CUSTOM) buildCustom(profile, options) else buildStandard(profile, options)
+    }
 
     private fun buildStandard(profile: ServerProfile, options: CoreOptions): String {
         val root = JSONObject()
@@ -70,7 +72,7 @@ object XrayConfigBuilder {
      * the config's first inbound so routing rules written for it still match.
      */
     private fun buildCustom(profile: ServerProfile, options: CoreOptions): String {
-        val root = JSONObject(requireNotNull(profile.rawJson) { "Custom profile without JSON" })
+        val root = JSONObject(requireNotNull(profile.rawConfig) { "Custom profile without JSON" })
         val firstInbound = root.optJSONArray("inbounds")?.optJSONObject(0)
         val tag = firstInbound?.optString("tag")?.takeIf { it.isNotEmpty() } ?: TUN_TAG
         root.put(
@@ -157,6 +159,7 @@ object XrayConfigBuilder {
                 o.put("settings", JSONObject().put("version", 2).put("address", p.address).put("port", p.port))
             }
             Protocol.CUSTOM -> error("Custom profiles carry their own outbounds")
+            Protocol.OPENVPN -> error("OpenVPN does not run on Xray")
         }
         if (p.protocol != Protocol.SHADOWSOCKS) {
             val stream = streamSettings(p.stream)
