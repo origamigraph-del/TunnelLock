@@ -101,12 +101,14 @@ class OpenVpnConfigTest {
 
     @Test
     fun runtimeConfigIsSafeAndManaged() {
-        val run = OpenVpnConfig.runtimeConfig(config, "/data/x/mgmt", "TunnelLock 0.1.20")
+        val run = OpenVpnConfig.runtimeConfig(config, "/data/x/mgmt", "TunnelLock 0.1.20", "/data/x/cache")
         val lines = run.lines()
         assertTrue("management /data/x/mgmt unix" in lines)
         assertTrue("management-client" in lines)
         assertTrue("management-query-passwords" in lines)
         assertTrue("management-hold" in lines)
+        // Android has no /tmp.
+        assertTrue("tmp-dir /data/x/cache" in lines)
         assertTrue("setenv IV_GUI_VER \"TunnelLock 0.1.20\"" in lines)
         // The login is asked over management, never read from a file.
         assertTrue("auth-user-pass" in lines)
@@ -132,7 +134,7 @@ class OpenVpnConfigTest {
     @Test
     fun inlineLoginStaysInline() {
         val inline = config.replace("auth-user-pass /etc/openvpn/login.txt", "<auth-user-pass>\nuser\npass\n</auth-user-pass>")
-        val run = OpenVpnConfig.runtimeConfig(inline, "/m", "t")
+        val run = OpenVpnConfig.runtimeConfig(inline, "/m", "t", "/data/x/cache")
         assertFalse("auth-user-pass" in run.lines())
         assertTrue(run.contains("<auth-user-pass>\nuser\npass\n</auth-user-pass>"))
     }
@@ -140,7 +142,7 @@ class OpenVpnConfigTest {
     @Test
     fun tlsAuthFileNextToInlineBlockKeepsDirection() {
         val withTlsAuth = config.replace("<tls-crypt>", "tls-auth ta.key 1\n<tls-auth>").replace("</tls-crypt>", "</tls-auth>")
-        val run = OpenVpnConfig.runtimeConfig(withTlsAuth, "/m", "t")
+        val run = OpenVpnConfig.runtimeConfig(withTlsAuth, "/m", "t", "/data/x/cache")
         assertFalse(run.contains("ta.key"))
         assertTrue("key-direction 1" in run.lines())
         assertTrue(run.contains("<tls-auth>"))

@@ -141,7 +141,12 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
         run.socketFile.delete()
         try {
             run.configFile.writeText(
-                OpenVpnConfig.runtimeConfig(ovpn, run.socketFile.absolutePath, "TunnelLock ${BuildConfig.VERSION_NAME}"),
+                OpenVpnConfig.runtimeConfig(
+                    ovpn,
+                    run.socketFile.absolutePath,
+                    "TunnelLock ${BuildConfig.VERSION_NAME}",
+                    context.cacheDir.absolutePath,
+                ),
             )
             val listener = LocalSocket()
             run.listener = listener

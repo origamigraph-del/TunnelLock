@@ -103,7 +103,7 @@ object OpenVpnConfig {
      * TunnelLock must control, plus the management connection through which the
      * app provides the TUN interface, the login and the key password.
      */
-    fun runtimeConfig(text: String, managementSocket: String, guiVersion: String): String {
+    fun runtimeConfig(text: String, managementSocket: String, guiVersion: String, tmpDir: String): String {
         val items = items(text)
         validate(items)
         val names = items.filterIsInstance<Item.Line>().mapNotNull { it.name }.toSet()
@@ -132,6 +132,8 @@ object OpenVpnConfig {
         out.append("management-hold\n")
         out.append("setenv IV_GUI_VER \"").append(guiVersion.replace("\"", "")).append("\"\n")
         out.append("ifconfig-nowarn\n")
+        // OpenVPN refuses to start if its temporary directory (/tmp by default) is missing, as on Android.
+        out.append("tmp-dir ").append(tmpDir).append('\n')
         // Reconnects keep the TUN interface instead of rebuilding it.
         if ("persist-tun" !in names) out.append("persist-tun\n")
         out.append("verb 3\n")
