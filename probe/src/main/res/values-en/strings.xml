@@ -11,8 +11,8 @@
     <string name="action_clear">Clear</string>
     <string name="action_reset_baseline">Forget current exit IP</string>
     <string name="profile_work">This copy runs inside the secure space (work profile) ✓</string>
-    <string name="profile_personal">This copy runs in the personal profile (outside the secure space, unprotected)</string>
-    <string name="counters">Online: %1$d · Blocked: %2$d · Leaks: %3$d · New IP: %4$d</string>
+    <string name="profile_personal">⚠️ This copy runs outside the secure space, so it has no VPN and shows your real IP (that is normal). For the test, open TunnelProbe with the briefcase icon.</string>
+    <string name="counters">Online: %1$d · Blocked: %2$d · Leaks: %3$d · New IP: %4$d · Direct: %5$d</string>
     <string name="interval">Test interval</string>
     <string name="home_country">Your country</string>
     <string name="real_ip">Your real IP (optional)</string>
@@ -25,4 +25,5 @@
     <string name="how_to">How to test:\n1. Add this app to the secure space with the outer TunnelLock, then open the copy inside the secure space.\n2. Connect the VPN and tap Start. You should see Online with the server\'s IP and country.\n3. Now break things: stop the server, switch Wi-Fi and mobile data, toggle airplane mode, or close TunnelLock.\n4. The whole time you should only see Blocked. Leak means traffic left with your home IP.\n5. Tap Copy log and send it for troubleshooting.\n\nEvery round tries four separate paths: HTTPS without DNS, HTTPS with DNS, IPv4/IPv6 and UDP (STUN).</string>
     <string name="action_send">Send log to developer</string>
     <string name="auto_send">Send automatically after each test</string>
+    <string name="verdict_direct">Direct, no VPN (normal in the personal profile)</string>
 </resources>

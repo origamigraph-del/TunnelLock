@@ -2,7 +2,6 @@ package app.tunnellock.probe
 
 import android.content.Context
 import android.os.Build
-import android.os.UserManager
 import app.tunnellock.core.report.LogUploader
 
 /** Sends the probe log to the developer (a comment on the repo's log issue). */
@@ -11,7 +10,7 @@ object ProbeReport {
 
     /** Blocking. */
     fun send(context: Context, log: String): Result<String> = runCatching {
-        val workProfile = Build.VERSION.SDK_INT >= 30 && context.getSystemService(UserManager::class.java).isManagedProfile
+        val workProfile = ProbeState.inSecureSpace(context)
         val details = listOf(
             "TunnelProbe ${BuildConfig.VERSION_NAME}, ${if (workProfile) "secure space" else "personal profile"} (user ${android.os.Process.myUid() / 100_000})",
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}",
