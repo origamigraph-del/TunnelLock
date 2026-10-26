@@ -9,6 +9,9 @@ IMAGE="system-images;android-$API;google_apis;x86_64"
 SDK=$ANDROID_HOME
 OUT=$(cd "$(dirname "$0")" && pwd)/out
 mkdir -p "$OUT"
+# avdmanager and the emulator must agree on where the virtual device lives.
+export ANDROID_AVD_HOME=$HOME/.android/avd
+mkdir -p "$ANDROID_AVD_HOME"
 
 annotate() { sed -e 's/%/%25/g' | cut -c1-220 | sed ':a;N;$!ba;s/\n/%0A/g'; }
 
@@ -20,10 +23,13 @@ if [ ! -d "$SDK/system-images/android-$API/google_apis/x86_64" ]; then
     echo "::error title=Emulator image::$(tr '\r' '\n' <"$OUT/sdk.log" | grep -v '^\s*$' | grep -v 'Loading\|\[=*' | tail -8 | annotate)"
     exit 1
 fi
-echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd -n e2e -k "$IMAGE" -d pixel_5 --force >"$OUT/avd.log" 2>&1 \
-    || { echo "::error title=AVD::$(tail -5 "$OUT/avd.log" | annotate)"; exit 1; }
+echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd -n e2e -k "$IMAGE" -d pixel_5 --force >"$OUT/avd.log" 2>&1
+if [ ! -f "$ANDROID_AVD_HOME/e2e.avd/config.ini" ]; then
+    echo "::error title=AVD::not created in $ANDROID_AVD_HOME: $(tail -5 "$OUT/avd.log" | annotate) | found: $(find "$HOME" -maxdepth 4 -name 'e2e.ini' 2>/dev/null | head -3)"
+    exit 1
+fi
 # A bigger data partition: two users and two apps with native libraries.
-printf 'disk.dataPartition.size=6G\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >>"$HOME/.android/avd/e2e.avd/config.ini"
+printf 'disk.dataPartition.size=6G\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >>"$ANDROID_AVD_HOME/e2e.avd/config.ini"
 
 nohup "$SDK/emulator/emulator" -avd e2e -no-window -no-audio -no-boot-anim -no-snapshot \
     -gpu swiftshader_indirect -camera-back none -camera-front none -accel on \
