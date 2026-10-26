@@ -83,14 +83,21 @@ jobs:
             app/build/outputs/apk/release/*.apk
             probe/build/outputs/apk/release/*.apk
 
-      - name: Publish pre-release
+      # Published as the "latest" release with fixed file names, so these links always
+      # give the newest build and can be opened straight from the phone's browser:
+      #   https://github.com/<owner>/<repo>/releases/latest/download/TunnelLock.apk
+      #   https://github.com/<owner>/<repo>/releases/latest/download/TunnelProbe.apk
+      - name: Publish release
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signature.outputs.release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/*.apk dist/TunnelLock.apk
+          cp probe/build/outputs/apk/release/*.apk dist/TunnelProbe.apk
           tag="build-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
-          gh release create "$tag" app/build/outputs/apk/release/*.apk probe/build/outputs/apk/release/*.apk \
+          gh release create "$tag" dist/TunnelLock.apk dist/TunnelProbe.apk \
             --target "${GITHUB_SHA}" \
-            --prerelease \
-            --title "TunnelLock build ${GITHUB_RUN_NUMBER}" \
-            --notes "Automatic build from ${GITHUB_SHA::7}. TunnelLock-*.apk is the app (installs as an update). TunnelProbe-*.apk is the leak-test tool."
+            --latest \
+            --title "TunnelLock 0.1.${GITHUB_RUN_NUMBER}" \
+            --notes "Build from ${GITHUB_SHA::7}. TunnelLock.apk is the app (installs as an update). TunnelProbe.apk is the leak-test tool."
