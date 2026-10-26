@@ -55,8 +55,10 @@ jobs:
       - name: Build OpenVPN
         if: steps.openvpn-cache.outputs.cache-hit != 'true'
         run: |
-          sudo apt-get install -y -qq autoconf automake libtool pkg-config >/dev/null
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" >/dev/null
+          { sudo apt-get update -qq && sudo apt-get install -y -qq autoconf automake libtool pkg-config; } >/tmp/apt.log 2>&1 \
+            || { echo "::error title=apt-get failed::$(tail -5 /tmp/apt.log | tr '\n' ' ')"; exit 1; }
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" >/tmp/sdk.log 2>&1 \
+            || { echo "::error title=NDK install failed::$(tail -5 /tmp/sdk.log | tr '\n' ' ')"; exit 1; }
           native/build-openvpn.sh "$ANDROID_HOME/ndk/${NDK_VERSION}" native/out
 
       - name: Add OpenVPN to the app

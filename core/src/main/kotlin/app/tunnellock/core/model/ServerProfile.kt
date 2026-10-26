@@ -7,6 +7,11 @@ enum class Protocol(val label: String) {
     SHADOWSOCKS("Shadowsocks"),
     HYSTERIA2("Hysteria2"),
     CUSTOM("Xray JSON"),
+    OPENVPN("OpenVPN"),
+    ;
+
+    /** Runs on the Xray core (everything except OpenVPN). */
+    val isXray: Boolean get() = this != OPENVPN
 }
 
 /** Transport and security settings shared by the V2Ray-family protocols. */
@@ -46,14 +51,14 @@ data class ServerProfile(
     val protocol: Protocol,
     val address: String,
     val port: Int,
-    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks, auth for Hysteria2. */
+    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks, auth for Hysteria2. Unused for OpenVPN. */
     val secret: String = "",
     /** Shadowsocks cipher, VMess security, or VLESS encryption. */
     val method: String? = null,
     val flow: String? = null,
     val stream: StreamConfig = StreamConfig(),
-    /** Full Xray JSON for [Protocol.CUSTOM]. */
-    val rawJson: String? = null,
+    /** Full Xray JSON for [Protocol.CUSTOM]; the .ovpn file for [Protocol.OPENVPN]. */
+    val rawConfig: String? = null,
 ) {
     val displayAddress: String
         get() = if (address.contains(':')) "[$address]:$port" else "$address:$port"
