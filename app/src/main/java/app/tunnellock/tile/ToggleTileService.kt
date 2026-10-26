@@ -5,6 +5,7 @@ import android.app.StatusBarManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.service.quicksettings.Tile
@@ -16,15 +17,32 @@ import app.tunnellock.R
  * Quick Settings tile of the personal copy: connects or disconnects the VPN of
  * the secure space. The tunnel runs in the other profile, whose state cannot be
  * read from here, so the tile is a plain button.
+ *
+ * Disabled in the manifest: the tile only exists after the user turns it on.
  */
 class ToggleTileService : TileService() {
 
     companion object {
+        private fun component(context: Context) = ComponentName(context, ToggleTileService::class.java)
+
+        fun isEnabled(context: Context): Boolean =
+            context.packageManager.getComponentEnabledSetting(component(context)) ==
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+
+        /** Turning it off removes the tile from Quick Settings. */
+        fun setEnabled(context: Context, enabled: Boolean) {
+            context.packageManager.setComponentEnabledSetting(
+                component(context),
+                if (enabled) PackageManager.COMPONENT_ENABLED_STATE_ENABLED else PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+        }
+
         /** Asks Android to put the tile in Quick Settings. [onResult] gets true if it is there now. */
         @RequiresApi(33)
         fun requestAdd(context: Context, onResult: (Boolean) -> Unit) {
             context.getSystemService(StatusBarManager::class.java).requestAddTileService(
-                ComponentName(context, ToggleTileService::class.java),
+                component(context),
                 context.getString(R.string.app_name),
                 Icon.createWithResource(context, R.drawable.ic_notification),
                 context.mainExecutor,

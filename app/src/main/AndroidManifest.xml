@@ -94,8 +94,10 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Off until the user turns the tile on in the personal copy. -->
         <service
             android:name=".tile.ToggleTileService"
+            android:enabled="false"
             android:exported="true"
             android:icon="@drawable/ic_notification"
             android:label="@string/app_name"

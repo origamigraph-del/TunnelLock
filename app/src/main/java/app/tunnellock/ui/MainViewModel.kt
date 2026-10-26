@@ -52,7 +52,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val updating: StateFlow<Set<String>> = SubscriptionUpdater.updating
 
     init {
-        // Opening the app is a good moment to refresh subscriptions older than 12 hours.
+        // Opening the app is a good moment to refresh subscriptions older than 12 hours (if turned on).
         viewModelScope.launch { SubscriptionUpdater.updateStale(store) }
     }
 
@@ -212,6 +212,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setPauseWhenDisconnected(enabled: Boolean) = store.setPauseWhenDisconnected(enabled)
 
     fun setFailover(enabled: Boolean) = store.setFailover(enabled)
+
+    fun setAutoUpdateSubscriptions(enabled: Boolean) {
+        store.setAutoUpdateSubscriptions(enabled)
+        if (enabled) viewModelScope.launch { SubscriptionUpdater.updateStale(store) }
+    }
 
     fun reapplyPolicies() {
         Policy.finalizeProfile(app)
