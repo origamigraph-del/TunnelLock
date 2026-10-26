@@ -21,7 +21,8 @@ env:
 
 jobs:
   e2e:
-    runs-on: ubuntu-latest
+    # Pinned: the emulator setup below is known to work on 24.04.
+    runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
       - uses: actions/checkout@v5
@@ -88,6 +89,11 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          if [ -w /dev/kvm ]; then
+            echo "::notice title=KVM::hardware acceleration is available"
+          else
+            echo "::error title=KVM::/dev/kvm is not usable: $(ls -l /dev/kvm 2>&1)"
+          fi
 
       - name: Run the test on an emulator
         uses: reactivecircus/android-emulator-runner@v2
@@ -98,7 +104,8 @@ jobs:
           ram-size: 4096M
           disk-size: 6000M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-boot-timeout: 1200
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot-save
           script: bash e2e/run.sh
 
       - name: Server logs
