@@ -25,6 +25,8 @@ object OpenVpnConfig {
         // Process, files and logging: TunnelLock runs and watches the process itself.
         "daemon", "log", "log-append", "status", "status-version", "writepid", "syslog", "cd", "chroot",
         "user", "group", "mlock", "tmp-dir", "dev-node", "iproute", "lladdr", "engine", "askpass",
+        // Higher levels can put connection details into the app's log.
+        "verb",
         // TunnelLock's own management connection replaces any other.
         "management", "management-client", "management-query-passwords", "management-hold", "management-signal",
         "management-forget-disconnect", "management-external-key", "management-external-cert", "management-up-down",
@@ -130,7 +132,7 @@ object OpenVpnConfig {
         out.append("ifconfig-nowarn\n")
         // Reconnects keep the TUN interface instead of rebuilding it.
         if ("persist-tun" !in names) out.append("persist-tun\n")
-        if ("verb" !in names) out.append("verb 3\n")
+        out.append("verb 3\n")
         // The default waits up to 5 minutes between attempts.
         if ("connect-retry" !in names) out.append("connect-retry 2 30\n")
         return out.toString()
