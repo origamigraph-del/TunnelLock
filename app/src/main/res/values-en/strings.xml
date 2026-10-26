@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_name">TunnelLock secure space</string>
+    <string name="admin_description">TunnelLock manages the secure space so the apps inside it can only reach the internet through the VPN.</string>
+    <string name="notification_channel">Tunnel status</string>
+
+    <string name="phase_off">Off</string>
+    <string name="phase_off_desc">The VPN service is not running. Android still keeps the secure-space apps offline.</string>
+    <string name="phase_guarding">Locked</string>
+    <string name="phase_guarding_desc">Not connected. Protected apps are paused and have no internet.</string>
+    <string name="phase_connecting">Connecting…</string>
+    <string name="phase_connecting_desc">Apps stay locked until the connection really works.</string>
+    <string name="phase_connected">Connected</string>
+    <string name="phase_connected_desc">Protected apps reach the internet only through this VPN.</string>
+    <string name="phase_reconnecting">Connection lost</string>
+    <string name="phase_reconnecting_desc">Reconnecting. Protected apps have no internet until the connection is back.</string>
+
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+
+    <string name="error_no_server">Add and select a server first.</string>
+    <string name="error_vpn_permission">VPN permission has not been granted.</string>
+    <string name="error_core_start">Xray core failed to start: %1$s</string>
+    <string name="error_server_unreachable">The server is not reachable. Try another server.</string>
+    <string name="error_revoked">Another VPN replaced TunnelLock.</string>
+
+    <string name="msg_app_added">“%1$s” was added to the secure space.</string>
+    <string name="msg_app_add_failed">Adding “%1$s” failed: %2$s</string>
+    <string name="msg_nothing_to_import">Nothing to import.</string>
+    <string name="msg_import_failed">Could not read the link. %1$s</string>
+    <string name="msg_imported">Added %1$d server(s).</string>
+    <string name="msg_subscription_empty">Subscription “%1$s” had no servers.</string>
+    <string name="msg_subscription_updated">Subscription “%1$s” updated (%2$d servers).</string>
+    <string name="msg_subscription_failed">Fetching subscription “%1$s” failed: %2$s</string>
+    <string name="msg_lockdown_ok">The system kill switch is active.</string>
+    <string name="msg_lockdown_failed">Could not enable the system kill switch.</string>
+    <string name="subscription_default_name">Subscription</string>
+
+    <string name="tab_home">Connect</string>
+    <string name="tab_servers">Servers</string>
+    <string name="tab_apps">Apps</string>
+    <string name="tab_settings">Settings</string>
+
+    <string name="setup_intro">TunnelLock creates a separate “secure space” on your phone. Apps you put in it can only use the internet through the VPN. If the VPN drops even for a moment, Android itself cuts their internet, and they won\'t open until it reconnects.</string>
+    <string name="setup_steps_title">Steps</string>
+    <string name="setup_step1">1. Tap “Create secure space” and confirm Android\'s screens.</string>
+    <string name="setup_step2">2. TunnelLock opens inside the secure space (with a briefcase badge).</string>
+    <string name="setup_step3">3. Under Servers, add a V2Ray link or a subscription link.</string>
+    <string name="setup_step4">4. Under Apps, add the apps you want to protect.</string>
+    <string name="setup_step5">5. Tap connect.</string>
+    <string name="setup_create">Create secure space</string>
+    <string name="setup_open">Open secure space</string>
+    <string name="setup_waiting">The secure space is being set up…</string>
+    <string name="setup_cannot_create">A secure space can\'t be created on this phone. There is probably already a work profile (e.g. Shelter, Island or a company profile). A phone allows only one; remove it under Settings › Accounts and try again.</string>
+    <string name="setup_provisioning_missing">This phone does not support work profiles.</string>
+    <string name="setup_note">Apps in the secure space are separate copies, so you sign in to them once more. Your normal apps are not touched.</string>
+
+    <string name="home_tap_connect">Tap to connect</string>
+    <string name="home_tap_disconnect">Tap to disconnect</string>
+    <string name="home_vpn_permission">TunnelLock does not have VPN permission.</string>
+    <string name="home_allow">Allow</string>
+    <string name="home_notifications">Allow notifications to see the connection status in the status bar.</string>
+    <string name="home_server">Server</string>
+    <string name="home_no_server">No server selected</string>
+    <string name="home_protected_apps">Protected apps</string>
+    <string name="home_protected_count">%1$d apps</string>
+    <string name="home_apps_paused">Paused, no internet</string>
+    <string name="home_apps_running">Running, VPN only</string>
+    <string name="home_killswitch">System kill switch</string>
+    <string name="home_killswitch_on">Active: Android gives no internet without the VPN</string>
+    <string name="home_killswitch_off">Inactive</string>
+    <string name="home_fix">Tap to enable</string>
+
+    <string name="servers_paste">From clipboard</string>
+    <string name="servers_text">Enter text</string>
+    <string name="servers_scan">Scan QR</string>
+    <string name="servers_subscription">Subscription</string>
+    <string name="servers_test">Ping test</string>
+    <string name="servers_empty">No servers yet. Copy a vless, vmess, trojan or ss link and tap “From clipboard”, or add a subscription.</string>
+    <string name="servers_subscriptions">Subscriptions</string>
+    <string name="servers_list">Servers (%1$d)</string>
+    <string name="servers_delete_confirm">Delete server “%1$s”?</string>
+    <string name="servers_delete_subscription_confirm">Delete subscription “%1$s” and its servers?</string>
+    <string name="servers_latency_failed">Failed</string>
+    <string name="servers_update">Update</string>
+
+    <string name="dialog_paste_title">Import servers</string>
+    <string name="dialog_paste_hint">Links (one per line) or a JSON config</string>
+    <string name="dialog_import">Import</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_sub_title">Add subscription</string>
+    <string name="dialog_sub_name">Name</string>
+    <string name="dialog_sub_url">Subscription URL (https://…)</string>
+    <string name="dialog_add">Add</string>
+    <string name="dialog_delete">Delete</string>
+
+    <string name="apps_hint">Every app in the secure space is protected: it only opens and reaches the internet while the VPN is connected.</string>
+    <string name="apps_install_permission">To add apps, allow TunnelLock to install unknown apps.</string>
+    <string name="apps_open_settings">Open settings</string>
+    <string name="apps_search">Search apps</string>
+    <string name="apps_protected">Protected (%1$d)</string>
+    <string name="apps_protected_empty">No apps added yet.</string>
+    <string name="apps_paused">Paused (VPN not connected)</string>
+    <string name="apps_running">Running</string>
+    <string name="apps_remove">Remove</string>
+    <string name="apps_available">Phone apps (%1$d)</string>
+    <string name="apps_add">Add</string>
+
+    <string name="settings_auto_connect">Auto-connect</string>
+    <string name="settings_auto_connect_desc">Connects to the last server after the phone starts or the service restarts.</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_reapply">Re-apply secure space rules</string>
+    <string name="settings_reapply_desc">Sets the system kill switch and install access again.</string>
+    <string name="settings_unknown_sources">Allow installing apps</string>
+    <string name="settings_unknown_sources_desc">Needed to copy apps into the secure space.</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_how_title">How does it work?</string>
+    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• While you are not connected, protected apps are paused and won\'t open.\n• Your normal apps (outside the secure space) are not affected.</string>
+</resources>

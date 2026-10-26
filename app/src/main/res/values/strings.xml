@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">TunnelLock</string>
+    <string name="profile_name">فضای امن TunnelLock</string>
+    <string name="admin_description">TunnelLock فضای امن را مدیریت می‌کند تا اپ‌های داخل آن فقط از طریق VPN به اینترنت دسترسی داشته باشند.</string>
+    <string name="notification_channel">وضعیت تونل</string>
+
+    <!-- Phases -->
+    <string name="phase_off">خاموش</string>
+    <string name="phase_off_desc">سرویس VPN اجرا نمی‌شود. اندروید همچنان اینترنت اپ‌های فضای امن را قطع نگه می‌دارد.</string>
+    <string name="phase_guarding">قفل</string>
+    <string name="phase_guarding_desc">به سروری وصل نیستید. اپ‌های محافظت‌شده متوقف هستند و اینترنت ندارند.</string>
+    <string name="phase_connecting">در حال اتصال…</string>
+    <string name="phase_connecting_desc">اپ‌ها تا وقتی اتصال واقعاً برقرار نشود قفل می‌مانند.</string>
+    <string name="phase_connected">متصل</string>
+    <string name="phase_connected_desc">اپ‌های محافظت‌شده فقط از طریق این VPN به اینترنت دسترسی دارند.</string>
+    <string name="phase_reconnecting">اتصال قطع شد</string>
+    <string name="phase_reconnecting_desc">در حال اتصال دوباره. تا برقراری اتصال، اینترنت اپ‌های محافظت‌شده قطع است.</string>
+
+    <string name="action_connect">اتصال</string>
+    <string name="action_disconnect">قطع</string>
+
+    <!-- Errors -->
+    <string name="error_no_server">اول یک سرور اضافه و انتخاب کنید.</string>
+    <string name="error_vpn_permission">مجوز VPN داده نشده است.</string>
+    <string name="error_core_start">هسته Xray اجرا نشد: %1$s</string>
+    <string name="error_server_unreachable">سرور در دسترس نیست. سرور دیگری را امتحان کنید.</string>
+    <string name="error_revoked">VPN دیگری جای TunnelLock را گرفت.</string>
+
+    <!-- Messages -->
+    <string name="msg_app_added">«%1$s» به فضای امن اضافه شد.</string>
+    <string name="msg_app_add_failed">افزودن «%1$s» ناموفق بود: %2$s</string>
+    <string name="msg_nothing_to_import">متنی برای وارد کردن نیست.</string>
+    <string name="msg_import_failed">لینک قابل خواندن نیست. %1$s</string>
+    <string name="msg_imported">%1$d سرور اضافه شد.</string>
+    <string name="msg_subscription_empty">اشتراک «%1$s» سروری نداشت.</string>
+    <string name="msg_subscription_updated">اشتراک «%1$s» به‌روز شد (%2$d سرور).</string>
+    <string name="msg_subscription_failed">دریافت اشتراک «%1$s» ناموفق بود: %2$s</string>
+    <string name="msg_lockdown_ok">قطع اینترنت سیستمی فعال است.</string>
+    <string name="msg_lockdown_failed">فعال کردن قطع اینترنت سیستمی ناموفق بود.</string>
+    <string name="subscription_default_name">اشتراک</string>
+
+    <!-- Tabs -->
+    <string name="tab_home">اتصال</string>
+    <string name="tab_servers">سرورها</string>
+    <string name="tab_apps">اپ‌ها</string>
+    <string name="tab_settings">تنظیمات</string>
+
+    <!-- Setup (personal profile) -->
+    <string name="setup_intro">TunnelLock یک «فضای امن» جدا روی گوشی می‌سازد. اپ‌هایی که داخل آن بگذارید فقط از طریق VPN اینترنت دارند. اگر VPN حتی یک لحظه قطع شود، خود اندروید اینترنت آن‌ها را قطع می‌کند و اپ‌ها تا اتصال دوباره باز نمی‌شوند.</string>
+    <string name="setup_steps_title">مراحل</string>
+    <string name="setup_step1">۱. «ساخت فضای امن» را بزنید و مراحل اندروید را تأیید کنید.</string>
+    <string name="setup_step2">۲. TunnelLock داخل فضای امن (با آیکون کیف) خودکار باز می‌شود.</string>
+    <string name="setup_step3">۳. در بخش سرورها، لینک V2Ray یا لینک اشتراک را اضافه کنید.</string>
+    <string name="setup_step4">۴. در بخش اپ‌ها، اپ‌هایی را که می‌خواهید محافظت شوند اضافه کنید.</string>
+    <string name="setup_step5">۵. دکمه اتصال را بزنید.</string>
+    <string name="setup_create">ساخت فضای امن</string>
+    <string name="setup_open">باز کردن فضای امن</string>
+    <string name="setup_waiting">فضای امن در حال آماده شدن است…</string>
+    <string name="setup_cannot_create">روی این گوشی نمی‌شود فضای امن ساخت. احتمالاً از قبل یک پروفایل کاری (مثلاً Shelter، Island یا پروفایل شرکت) وجود دارد. هر گوشی فقط یکی می‌پذیرد؛ آن را از تنظیمات › حساب‌ها حذف کنید و دوباره امتحان کنید.</string>
+    <string name="setup_provisioning_missing">این گوشی از ساخت پروفایل کاری پشتیبانی نمی‌کند.</string>
+    <string name="setup_note">اپ‌های داخل فضای امن یک نسخه جدا هستند و باید یک بار دوباره در آن‌ها وارد حساب شوید. اپ‌های معمولی گوشی دست‌نخورده می‌مانند.</string>
+
+    <!-- Home -->
+    <string name="home_tap_connect">برای اتصال بزنید</string>
+    <string name="home_tap_disconnect">برای قطع بزنید</string>
+    <string name="home_vpn_permission">TunnelLock مجوز VPN ندارد.</string>
+    <string name="home_allow">اجازه دادن</string>
+    <string name="home_notifications">برای دیدن وضعیت اتصال در نوار اعلان، اجازه اعلان بدهید.</string>
+    <string name="home_server">سرور</string>
+    <string name="home_no_server">سروری انتخاب نشده</string>
+    <string name="home_protected_apps">اپ‌های محافظت‌شده</string>
+    <string name="home_protected_count">%1$d اپ</string>
+    <string name="home_apps_paused">متوقف و بدون اینترنت</string>
+    <string name="home_apps_running">فعال، فقط از طریق VPN</string>
+    <string name="home_killswitch">قطع اینترنت سیستمی (Kill Switch)</string>
+    <string name="home_killswitch_on">فعال، اندروید بدون VPN اینترنت نمی‌دهد</string>
+    <string name="home_killswitch_off">غیرفعال</string>
+    <string name="home_fix">برای فعال کردن بزنید</string>
+
+    <!-- Servers -->
+    <string name="servers_paste">از کلیپ‌بورد</string>
+    <string name="servers_text">وارد کردن متن</string>
+    <string name="servers_scan">اسکن QR</string>
+    <string name="servers_subscription">لینک اشتراک</string>
+    <string name="servers_test">تست پینگ</string>
+    <string name="servers_empty">هنوز سروری ندارید. لینک vless، vmess، trojan یا ss را کپی کنید و «از کلیپ‌بورد» را بزنید، یا لینک اشتراک اضافه کنید.</string>
+    <string name="servers_subscriptions">اشتراک‌ها</string>
+    <string name="servers_list">سرورها (%1$d)</string>
+    <string name="servers_delete_confirm">سرور «%1$s» حذف شود؟</string>
+    <string name="servers_delete_subscription_confirm">اشتراک «%1$s» و سرورهایش حذف شوند؟</string>
+    <string name="servers_latency_failed">ناموفق</string>
+    <string name="servers_update">به‌روزرسانی</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_paste_title">وارد کردن سرور</string>
+    <string name="dialog_paste_hint">لینک‌ها (هر خط یکی) یا کانفیگ JSON</string>
+    <string name="dialog_import">وارد کردن</string>
+    <string name="dialog_cancel">انصراف</string>
+    <string name="dialog_sub_title">افزودن اشتراک</string>
+    <string name="dialog_sub_name">نام</string>
+    <string name="dialog_sub_url">لینک اشتراک (https://…)</string>
+    <string name="dialog_add">افزودن</string>
+    <string name="dialog_delete">حذف</string>
+
+    <!-- Apps -->
+    <string name="apps_hint">هر اپی که در فضای امن باشد محافظت‌شده است: فقط وقتی VPN وصل است باز می‌شود و اینترنت دارد.</string>
+    <string name="apps_install_permission">برای افزودن اپ، اجازه «نصب برنامه‌های ناشناس» را برای TunnelLock روشن کنید.</string>
+    <string name="apps_open_settings">باز کردن تنظیمات</string>
+    <string name="apps_search">جستجوی اپ</string>
+    <string name="apps_protected">محافظت‌شده (%1$d)</string>
+    <string name="apps_protected_empty">هنوز اپی اضافه نکرده‌اید.</string>
+    <string name="apps_paused">متوقف (VPN وصل نیست)</string>
+    <string name="apps_running">فعال</string>
+    <string name="apps_remove">حذف</string>
+    <string name="apps_available">اپ‌های گوشی (%1$d)</string>
+    <string name="apps_add">افزودن</string>
+
+    <!-- Settings -->
+    <string name="settings_auto_connect">اتصال خودکار</string>
+    <string name="settings_auto_connect_desc">بعد از روشن شدن گوشی یا راه‌اندازی دوباره سرویس، به آخرین سرور وصل می‌شود.</string>
+    <string name="settings_language">زبان</string>
+    <string name="settings_reapply">اعمال دوباره قوانین فضای امن</string>
+    <string name="settings_reapply_desc">قطع اینترنت سیستمی و دسترسی نصب را دوباره تنظیم می‌کند.</string>
+    <string name="settings_unknown_sources">اجازه نصب اپ</string>
+    <string name="settings_unknown_sources_desc">برای کپی کردن اپ‌ها به فضای امن لازم است.</string>
+    <string name="settings_version">نسخه</string>
+    <string name="settings_how_title">چطور کار می‌کند؟</string>
+    <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی وصل نیستید، اپ‌های محافظت‌شده متوقف می‌شوند و باز نمی‌شوند.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
+</resources>
