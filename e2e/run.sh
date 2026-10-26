@@ -12,13 +12,33 @@ OUT=$ROOT/e2e/out
 APP=app.tunnellock
 PROBE=app.tunnellock.probe
 OVPN_PASSWORD=${OVPN_PASSWORD:-e2e-secret-7}
-FAILED=0
 SUMMARY=${GITHUB_STEP_SUMMARY:-/dev/null}
+PASSED=()
+FAILED=()
 
-pass() { echo "::notice title=PASS $1::$2"; echo "- ✅ **$1**: $2" >>"$SUMMARY"; }
-fail() { echo "::error title=FAIL $1::$2"; echo "- ❌ **$1**: $2" >>"$SUMMARY"; FAILED=1; }
+# GitHub shows at most 10 annotations of a kind per step: results are collected
+# and reported together at the end.
+pass() { echo "PASS $1: $2"; PASSED+=("$1: $2"); echo "- ✅ **$1**: $2" >>"$SUMMARY"; }
+fail() { echo "FAIL $1: $2"; FAILED+=("$1: $2"); echo "- ❌ **$1**: $2" >>"$SUMMARY"; }
 oneline() { sed -e 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g'; }
 sh_() { adb shell "$@" | tr -d '\r'; }
+
+report() {
+    if [ ${#PASSED[@]} -gt 0 ]; then
+        echo "::notice title=Passed (${#PASSED[@]})::$(printf '%s\n' "${PASSED[@]}" | oneline)"
+    fi
+    if [ ${#FAILED[@]} -gt 0 ]; then
+        echo "::error title=Failed (${#FAILED[@]})::$(printf '%s\n' "${FAILED[@]}" | oneline)"
+    fi
+    echo "::notice title=TunnelLock log (end)::$(applog | tail -80 | cut -c1-200 | oneline)"
+    echo "::notice title=TunnelProbe log (end)::$(probelog | tail -40 | cut -c1-160 | oneline)"
+    mkdir -p "$OUT/logs"
+    applog >"$OUT/logs/tunnellock.log"
+    probelog >"$OUT/logs/probe.log"
+    adb logcat -d >"$OUT/logs/logcat.txt"
+    [ ${#FAILED[@]} -eq 0 ]
+    exit $?
+}
 
 # ---- set up the secure space from the shell -------------------------------------
 
@@ -29,23 +49,8 @@ adb install -r -g "$ROOT"/app/build/outputs/apk/release/*.apk >/dev/null
 adb install -r -g "$ROOT"/probe/build/outputs/apk/release/*.apk >/dev/null
 
 U=$(sh_ pm create-user --profileOf 0 --managed TunnelLockTest | grep -o '[0-9]*$')
-if [ -z "$U" ]; then
-    fail "Secure space" "could not create a work profile on the emulator"
-    exit 1
-fi
-sh_ am start-user -w "$U" >/dev/null
-sh_ pm install-existing --user "$U" $APP >/dev/null
-sh_ pm install-existing --user "$U" $PROBE >/dev/null
-owner_result=$(sh_ dpm set-profile-owner --user "$U" $APP/.strict.AdminReceiver)
-case "$owner_result" in
-    *Success*) pass "Secure space" "work profile $U created, TunnelLock is its owner" ;;
-    *) fail "Secure space" "set-profile-owner: $owner_result"; exit 1 ;;
-esac
-sh_ appops set --user "$U" $APP ACTIVATE_VPN allow >/dev/null
-sh_ pm grant --user "$U" $PROBE android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
-
-DATA=/data/user/$U/$APP
-PROBE_LOG=/data/user/$U/$PROBE/files/probe.log
+DATA=/data/user/${U:-0}/$APP
+PROBE_LOG=/data/user/${U:-0}/$PROBE/files/probe.log
 APP_LOG=$DATA/files/app.log
 
 applog() { sh_ cat "$APP_LOG" 2>/dev/null; }
@@ -53,9 +58,34 @@ probelog() { sh_ cat "$PROBE_LOG" 2>/dev/null; }
 mark() { probelog | wc -l; }
 applines() { applog | wc -l; }
 
-# Writes the server list and the selection, then starts TunnelLock (it connects on its own).
+if [ -z "$U" ]; then
+    fail "Secure space" "could not create a work profile on the emulator"
+    report
+fi
+sh_ am start-user -w "$U" >/dev/null
+sh_ pm install-existing --user "$U" $APP >/dev/null
+sh_ pm install-existing --user "$U" $PROBE >/dev/null
+owner_result=$(sh_ dpm set-profile-owner --user "$U" $APP/.strict.AdminReceiver)
+case "$owner_result" in
+    *Success*) pass "Secure space" "work profile $U created, TunnelLock is its owner" ;;
+    *) fail "Secure space" "set-profile-owner: $owner_result"; report ;;
+esac
+sh_ appops set --user "$U" $APP ACTIVATE_VPN allow >/dev/null
+sh_ pm grant --user "$U" $PROBE android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
+
+# TunnelLock's process in the secure space (not the personal copy).
+app_pid() { sh_ ps -A -o PID,USER,NAME | awk -v user="u${U}_" 'index($2, user) == 1 && $3 == "app.tunnellock" {print $1}'; }
+
+# Kills TunnelLock like a crash would (a profile owner cannot be force-stopped).
+kill_app() {
+    local pid
+    pid=$(app_pid)
+    [ -n "$pid" ] && sh_ kill -9 "$pid"
+    sleep 1
+}
+
+# Writes the server list and the selection, then (re)starts TunnelLock; it connects on its own.
 start_with() { # <xray|ovpn> [password]
-    sh_ am force-stop --user "$U" $APP
     python3 "$ROOT/e2e/prefs.py" "$OUT/xray.link" "$OUT/client.ovpn" "$1" "${2:-$OVPN_PASSWORD}" >"$OUT/tunnellock.xml"
     adb push "$OUT/tunnellock.xml" /data/local/tmp/tunnellock.xml >/dev/null
     local uid ctx
@@ -65,6 +95,8 @@ start_with() { # <xray|ovpn> [password]
         && chown $uid:$uid $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml \
         && chmod 771 $DATA/shared_prefs && chmod 660 $DATA/shared_prefs/tunnellock.xml \
         && chcon $ctx $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml"
+    # A running TunnelLock still has the old list in memory.
+    kill_app
     sh_ am start --user "$U" -n $APP/.ui.MainActivity >/dev/null
 }
 
@@ -127,13 +159,24 @@ check_online() { # <name> <from>
 
 from=$(applines)
 start_with xray
-sh_ am start-foreground-service --user "$U" -n $PROBE/.ProbeService >/dev/null
 if wait_phase CONNECTED "$from" 120; then pass "V2Ray connect" "TunnelLock connected through the test Xray server"; else fail "V2Ray connect" "no CONNECTED within 120 s"; fi
+
+# TunnelProbe, opened the way a person would, then its test started.
+sh_ am start --user "$U" -n $PROBE/.MainActivity >/dev/null
+sleep 3
+sh_ am start-foreground-service --user "$U" -n $PROBE/.ProbeService >/dev/null
+sleep 15
+if [ "$(verdicts 0 0 | grep -c .)" -lt 2 ]; then
+    fail "TunnelProbe runs" "no probe rounds: $(probelog | tail -5 | tr '\n' ' ') | $(adb logcat -d | grep -iE 'tunnelprobe|app.tunnellock.probe|AndroidRuntime' | tail -15 | cut -c1-200 | oneline)"
+    report
+fi
+pass "TunnelProbe runs" "probing every 3 s inside the secure space"
+
 m=$(mark); sleep 25; check_online "V2Ray online" "$m"
-if grep -q "accepted" "$OUT/xray-access.log" 2>/dev/null; then
-    pass "Through the server" "the Xray server logged the probe's connections"
+if grep -q "ipify" "$OUT/xray-access.log" 2>/dev/null; then
+    pass "Through the server" "the Xray server carried the probe's requests"
 else
-    fail "Through the server" "the Xray server saw no connections"
+    fail "Through the server" "the probe's requests did not reach the Xray server"
 fi
 
 # ---- 2. server dies mid-use ----------------------------------------------------------
@@ -154,7 +197,11 @@ m=$(mark); sleep 20; check_online "V2Ray online again" "$m"
 # ---- 4. TunnelLock killed: Android's lockdown must block on its own ------------------
 
 m=$(mark); from=$(applines)
-sh_ am force-stop --user "$U" $APP
+old_pid=$(app_pid)
+kill_app
+if [ -n "$old_pid" ] && [ "$(app_pid)" = "$old_pid" ]; then
+    fail "Kill" "TunnelLock's process survived kill -9"
+fi
 sleep 30
 check_blocked_until_connected "TunnelLock killed" "$m" "$from"
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> CONNECTED"; then
@@ -162,7 +209,7 @@ if applog | tail -n +"$((from + 1))" | grep -q -- "-> CONNECTED"; then
 else
     from=$(applines)
     sh_ am start --user "$U" -n $APP/.ui.MainActivity >/dev/null
-    if wait_phase CONNECTED "$from" 120; then pass "Restart" "reconnected after being opened again"; else fail "Restart" "no CONNECTED within 120 s"; fi
+    if wait_phase CONNECTED "$from" 120; then pass "Restart" "reconnected when opened again"; else fail "Restart" "no CONNECTED within 120 s"; fi
 fi
 
 # ---- 5. manual disconnect -------------------------------------------------------------
@@ -207,14 +254,8 @@ check_blocked "Wrong password blocks" "$m"
 # ---- report ---------------------------------------------------------------------------
 
 if adb logcat -d -b crash | grep -q "$APP"; then
-    fail "No crashes" "$(adb logcat -d -b crash | grep -A 12 "$APP" | head -30 | oneline)"
+    fail "No crashes" "$(adb logcat -d -b crash | grep -A 12 "$APP" | head -30 | cut -c1-200 | oneline)"
 else
     pass "No crashes" "no crash of TunnelLock or TunnelProbe"
 fi
-echo "::notice title=TunnelLock log (end)::$(applog | tail -70 | cut -c1-200 | oneline)"
-echo "::notice title=TunnelProbe log (end)::$(probelog | tail -40 | cut -c1-160 | oneline)"
-mkdir -p "$OUT/logs"
-applog >"$OUT/logs/tunnellock.log"
-probelog >"$OUT/logs/probe.log"
-adb logcat -d >"$OUT/logs/logcat.txt"
-exit $FAILED
+report
