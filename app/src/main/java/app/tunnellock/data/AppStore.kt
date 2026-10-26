@@ -45,6 +45,14 @@ class AppStore(context: Context) {
     private val _autoConnect = MutableStateFlow(prefs.getBoolean(KEY_AUTO_CONNECT, true))
     val autoConnect: StateFlow<Boolean> = _autoConnect
 
+    /**
+     * Pause the protected apps while you are disconnected on purpose (so they
+     * cannot be opened). A connection that drops mid-use never pauses them:
+     * they stay open and only lose internet.
+     */
+    private val _pauseWhenDisconnected = MutableStateFlow(prefs.getBoolean(KEY_PAUSE_WHEN_DISCONNECTED, true))
+    val pauseWhenDisconnected: StateFlow<Boolean> = _pauseWhenDisconnected
+
     @Synchronized
     fun addServers(parsed: List<ParsedServer>, subscriptionId: String? = null): Int {
         val added = parsed.map { it.toStored(subscriptionId) }
@@ -86,6 +94,11 @@ class AppStore(context: Context) {
     fun setAutoConnect(enabled: Boolean) {
         _autoConnect.value = enabled
         prefs.edit().putBoolean(KEY_AUTO_CONNECT, enabled).apply()
+    }
+
+    fun setPauseWhenDisconnected(enabled: Boolean) {
+        _pauseWhenDisconnected.value = enabled
+        prefs.edit().putBoolean(KEY_PAUSE_WHEN_DISCONNECTED, enabled).apply()
     }
 
     @Synchronized
@@ -173,5 +186,6 @@ class AppStore(context: Context) {
         const val KEY_SUBSCRIPTIONS = "subscriptions"
         const val KEY_SELECTED = "selected"
         const val KEY_AUTO_CONNECT = "autoConnect"
+        const val KEY_PAUSE_WHEN_DISCONNECTED = "pauseWhenDisconnected"
     }
 }

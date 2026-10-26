@@ -9,7 +9,8 @@ plugins {
 // signing/release.jks is encrypted; its password comes from the SIGNING_PASSWORD
 // secret. Every build must use this same key so it can update the installed app
 // in place: uninstalling would delete the secure space.
-val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.takeIf { it.isNotBlank() }
+// Trimmed: a pasted secret easily picks up a trailing newline.
+val signingPassword: String? = System.getenv("SIGNING_PASSWORD")?.trim()?.takeIf { it.isNotEmpty() }
 
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 

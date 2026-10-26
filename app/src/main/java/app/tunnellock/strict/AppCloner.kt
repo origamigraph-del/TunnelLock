@@ -9,8 +9,7 @@ import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.content.IntentCompat
-import app.tunnellock.vpn.Phase
-import app.tunnellock.vpn.TunnelState
+import app.tunnellock.TunnelLockApp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import java.io.File
@@ -111,9 +110,8 @@ class InstallStatusReceiver : BroadcastReceiver() {
             }
             PackageInstaller.STATUS_SUCCESS -> {
                 val pkg = intent.getStringExtra(PackageInstaller.EXTRA_PACKAGE_NAME)
-                if (pkg != null && TunnelState.status.value.phase != Phase.CONNECTED) {
-                    Policy.setSuspended(context, listOf(pkg), true)
-                }
+                val store = (context.applicationContext as TunnelLockApp).store
+                if (pkg != null && store.pauseWhenDisconnected.value) AppGate.closeIfDisconnected(context, listOf(pkg))
                 AppCloner.emit(InstallEvent.Installed(label))
             }
             else -> AppCloner.emit(
