@@ -154,7 +154,13 @@ fun HomeScreen(vm: MainViewModel, onOpenServers: () -> Unit, onOpenApps: () -> U
             icon = Icons.Filled.Lock,
             title = stringResource(R.string.home_protected_apps),
             value = stringResource(R.string.home_protected_count, protectedCount),
-            detail = if (status.appsPaused) stringResource(R.string.home_apps_paused) else stringResource(R.string.home_apps_running),
+            detail = stringResource(
+                when {
+                    status.phase == Phase.CONNECTED -> R.string.home_apps_running
+                    status.appsPaused -> R.string.home_apps_paused
+                    else -> R.string.home_apps_blocked
+                },
+            ),
             onClick = onOpenApps,
         )
         InfoCard(

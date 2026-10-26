@@ -9,13 +9,13 @@
     <string name="phase_off">خاموش</string>
     <string name="phase_off_desc">سرویس VPN اجرا نمی‌شود. اندروید همچنان اینترنت اپ‌های فضای امن را قطع نگه می‌دارد.</string>
     <string name="phase_guarding">قفل</string>
-    <string name="phase_guarding_desc">به سروری وصل نیستید. اپ‌های محافظت‌شده متوقف هستند و اینترنت ندارند.</string>
+    <string name="phase_guarding_desc">به سروری وصل نیستید. اپ‌های محافظت‌شده اینترنت ندارند.</string>
     <string name="phase_connecting">در حال اتصال…</string>
     <string name="phase_connecting_desc">اپ‌ها تا وقتی اتصال واقعاً برقرار نشود قفل می‌مانند.</string>
     <string name="phase_connected">متصل</string>
     <string name="phase_connected_desc">اپ‌های محافظت‌شده فقط از طریق این VPN به اینترنت دسترسی دارند.</string>
     <string name="phase_reconnecting">اتصال قطع شد</string>
-    <string name="phase_reconnecting_desc">در حال اتصال دوباره. تا برقراری اتصال، اینترنت اپ‌های محافظت‌شده قطع است.</string>
+    <string name="phase_reconnecting_desc">در حال اتصال دوباره. اپ‌ها باز می‌مانند ولی تا برگشتن اتصال اینترنت ندارند.</string>
 
     <string name="action_connect">اتصال</string>
     <string name="action_disconnect">قطع</string>
@@ -47,7 +47,7 @@
     <string name="tab_settings">تنظیمات</string>
 
     <!-- Setup (personal profile) -->
-    <string name="setup_intro">TunnelLock یک «فضای امن» جدا روی گوشی می‌سازد. اپ‌هایی که داخل آن بگذارید فقط از طریق VPN اینترنت دارند. اگر VPN حتی یک لحظه قطع شود، خود اندروید اینترنت آن‌ها را قطع می‌کند و اپ‌ها تا اتصال دوباره باز نمی‌شوند.</string>
+    <string name="setup_intro">TunnelLock یک «فضای امن» جدا روی گوشی می‌سازد. اپ‌هایی که داخل آن بگذارید فقط از طریق VPN اینترنت دارند. اگر VPN حتی یک لحظه قطع شود، خود اندروید اینترنت آن‌ها را قطع می‌کند؛ اپ بسته نمی‌شود و با برگشتن اتصال دوباره کار می‌کند.</string>
     <string name="setup_steps_title">مراحل</string>
     <string name="setup_step1">۱. «ساخت فضای امن» را بزنید و مراحل اندروید را تأیید کنید.</string>
     <string name="setup_step2">۲. TunnelLock داخل فضای امن (با آیکون کیف) خودکار باز می‌شود.</string>
@@ -73,6 +73,7 @@
     <string name="home_protected_count">%1$d اپ</string>
     <string name="home_apps_paused">متوقف و بدون اینترنت</string>
     <string name="home_apps_running">فعال، فقط از طریق VPN</string>
+    <string name="home_apps_blocked">باز می‌مانند، ولی بدون اینترنت</string>
     <string name="home_killswitch">قطع اینترنت سیستمی (Kill Switch)</string>
     <string name="home_killswitch_on">فعال، اندروید بدون VPN اینترنت نمی‌دهد</string>
     <string name="home_killswitch_off">غیرفعال</string>
@@ -104,7 +105,7 @@
     <string name="dialog_delete">حذف</string>
 
     <!-- Apps -->
-    <string name="apps_hint">هر اپی که در فضای امن باشد محافظت‌شده است: فقط وقتی VPN وصل است باز می‌شود و اینترنت دارد.</string>
+    <string name="apps_hint">هر اپی که در فضای امن باشد محافظت‌شده است: فقط از طریق VPN اینترنت دارد و اگر اتصال قطع شود اینترنتش قطع می‌شود.</string>
     <string name="apps_install_permission">برای افزودن اپ، اجازه «نصب برنامه‌های ناشناس» را برای TunnelLock روشن کنید.</string>
     <string name="apps_open_settings">باز کردن تنظیمات</string>
     <string name="apps_search">جستجوی اپ</string>
@@ -119,6 +120,8 @@
     <!-- Settings -->
     <string name="settings_auto_connect">اتصال خودکار</string>
     <string name="settings_auto_connect_desc">بعد از روشن شدن گوشی یا راه‌اندازی دوباره سرویس، به آخرین سرور وصل می‌شود.</string>
+    <string name="settings_pause">متوقف کردن اپ‌ها وقتی قطع هستید</string>
+    <string name="settings_pause_desc">وقتی خودتان VPN را قطع می‌کنید یا هنوز وصل نشده‌اید، اپ‌های محافظت‌شده باز نمی‌شوند. اگر اتصال وسط کار قطع شود، اپ هیچ‌وقت بسته نمی‌شود؛ فقط اینترنتش قطع می‌شود.</string>
     <string name="settings_language">زبان</string>
     <string name="settings_reapply">اعمال دوباره قوانین فضای امن</string>
     <string name="settings_reapply_desc">قطع اینترنت سیستمی و دسترسی نصب را دوباره تنظیم می‌کند.</string>
@@ -126,5 +129,5 @@
     <string name="settings_unknown_sources_desc">برای کپی کردن اپ‌ها به فضای امن لازم است.</string>
     <string name="settings_version">نسخه</string>
     <string name="settings_how_title">چطور کار می‌کند؟</string>
-    <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی وصل نیستید، اپ‌های محافظت‌شده متوقف می‌شوند و باز نمی‌شوند.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
+    <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر اتصال وسط کار قطع شود، اپ باز می‌ماند و فقط اینترنتش قطع است؛ با برگشتن اتصال دوباره کار می‌کند.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی خودتان قطع می‌کنید (و گزینهٔ «متوقف کردن اپ‌ها» روشن است)، اپ‌های محافظت‌شده باز نمی‌شوند تا دوباره وصل شوید.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
 </resources>

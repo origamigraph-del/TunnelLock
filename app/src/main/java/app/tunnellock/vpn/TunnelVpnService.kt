@@ -18,7 +18,7 @@ import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppStore
-import app.tunnellock.strict.Policy
+import app.tunnellock.strict.AppGate
 import app.tunnellock.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +37,10 @@ import kotlinx.coroutines.launch
  *
  * In the secure space Android's always-on lockdown adds a second layer: if this
  * service is not running at all, the system itself blocks every app.
+ *
+ * Losing the connection only cuts the internet; the apps stay open. They are
+ * paused (cannot be opened) only when the user disconnects on purpose and the
+ * "pause when disconnected" setting is on.
  */
 class TunnelVpnService : VpnService() {
 
@@ -53,7 +57,6 @@ class TunnelVpnService : VpnService() {
         )
         private const val CHECK_INTERVAL_MS = 15_000L
         private const val INITIAL_ATTEMPTS = 3
-        private const val PAUSE_GRACE_MS = 15_000L
         private const val MAX_BACKOFF_MS = 30_000L
 
         fun send(context: Context, action: String) {
@@ -73,11 +76,21 @@ class TunnelVpnService : VpnService() {
         data object Revoke : Command
     }
 
+    private enum class SessionMode {
+        /** The user tapped connect: give up (and lock) if the server never answers. */
+        USER,
+
+        /** The service was restarted by the system: reconnect quietly and keep trying. */
+        RESTORE,
+
+        /** The network changed or dropped mid-use: keep trying, apps stay open. */
+        NETWORK,
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private var session: Job? = null
     private var tun: ParcelFileDescriptor? = null
-    private var droppedAt = 0L
     private lateinit var store: AppStore
 
     @Volatile private var currentNetwork: Network? = null
@@ -85,11 +98,9 @@ class TunnelVpnService : VpnService() {
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            // An app copied into the secure space must not run while the tunnel is down.
+            // A newly copied app is not in use yet; keep it closed while we are not connected.
             val pkg = intent.data?.schemeSpecificPart ?: return
-            if (TunnelState.status.value.phase != Phase.CONNECTED) {
-                Policy.setSuspended(context, listOf(pkg), true)
-            }
+            if (store.pauseWhenDisconnected.value) AppGate.closeIfDisconnected(context, listOf(pkg))
         }
     }
 
@@ -148,8 +159,8 @@ class TunnelVpnService : VpnService() {
         scope.cancel()
         XrayCore.stop()
         closeTun()
-        Policy.setAllSuspended(this, true)
-        TunnelState.update { TunnelStatus(phase = Phase.OFF) }
+        // Apps are not paused here: someone may be using one. Lockdown cuts their internet.
+        TunnelState.update { it.copy(phase = Phase.OFF, connectedSince = null) }
         super.onDestroy()
     }
 
@@ -158,45 +169,47 @@ class TunnelVpnService : VpnService() {
     private suspend fun handle(command: Command) {
         val phase = TunnelState.status.value.phase
         when (command) {
-            Command.Guard -> if (phase == Phase.OFF) enterGuard()
-            Command.SystemStart -> {
-                if (phase == Phase.OFF) enterGuard()
-                val idle = !TunnelState.status.value.phase.isActive
-                if (idle && store.autoConnect.value && store.selectedServer() != null) startSession(resume = false)
+            Command.Guard -> if (phase == Phase.OFF) enterGuard(pause = store.pauseWhenDisconnected.value)
+            Command.SystemStart -> if (!phase.isActive) {
+                if (store.autoConnect.value && store.selectedServer() != null) {
+                    // Possibly restarted while an app was in use: reconnect without touching the apps.
+                    startSession(SessionMode.RESTORE)
+                } else if (phase == Phase.OFF) {
+                    enterGuard(pause = store.pauseWhenDisconnected.value)
+                }
             }
-            Command.Connect -> startSession(resume = false)
+            Command.Connect -> startSession(SessionMode.USER)
             Command.Disconnect -> {
                 stopSession()
-                enterGuard()
+                enterGuard(pause = store.pauseWhenDisconnected.value)
             }
             Command.NetworkChanged -> if (phase == Phase.CONNECTED || phase == Phase.RECONNECTING) {
                 // Old connections are bound to the previous network; start over (the TUN stays up).
-                startSession(resume = true)
+                startSession(SessionMode.NETWORK)
             }
             Command.Revoke -> {
                 stopSession()
                 closeTun()
-                Policy.setAllSuspended(this, true)
-                setStatus { TunnelStatus(phase = Phase.OFF, error = getString(R.string.error_revoked)) }
+                setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_revoked)) }
                 stopSelf()
             }
         }
     }
 
-    private suspend fun startSession(resume: Boolean) {
+    private suspend fun startSession(mode: SessionMode) {
         stopSession()
         val profile = store.selectedServer()?.let { store.profileOf(it) }
         if (profile == null) {
-            enterGuard(getString(R.string.error_no_server))
+            enterGuard(getString(R.string.error_no_server), pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value)
             return
         }
         val fd = ensureTun()
         if (fd == null) {
-            enterGuard(getString(R.string.error_vpn_permission))
+            setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
             return
         }
         val config = XrayConfigBuilder.build(profile, CoreOptions(mtu = MTU))
-        session = scope.launch { runSession(profile.name, config, fd, resume) }
+        session = scope.launch { runSession(profile.name, config, fd, mode) }
     }
 
     private suspend fun stopSession() {
@@ -206,14 +219,14 @@ class TunnelVpnService : VpnService() {
     }
 
     /**
-     * Keeps one server connection alive. "Connected" (and un-pausing the apps)
+     * Keeps one server connection alive. "Connected" (and letting the apps run)
      * only happens after a real request went through the proxy.
      */
-    private suspend fun runSession(name: String, config: String, fd: Int, resume: Boolean) {
-        if (resume) {
+    private suspend fun runSession(name: String, config: String, fd: Int, mode: SessionMode) {
+        if (mode == SessionMode.NETWORK) {
             markDropped(name)
         } else {
-            setStatus { TunnelStatus(phase = Phase.CONNECTING, serverName = name, appsPaused = it.appsPaused) }
+            setStatus { it.copy(phase = Phase.CONNECTING, serverName = name, connectedSince = null, error = null) }
         }
         var failures = 0
         var backoff = 1_000L
@@ -223,7 +236,10 @@ class TunnelVpnService : VpnService() {
                 // A broken config will not fix itself by retrying.
                 Log.e(TAG, "core start failed", started.exceptionOrNull())
                 XrayCore.stop()
-                enterGuard(getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()))
+                enterGuard(
+                    getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()),
+                    pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value,
+                )
                 return
             }
             if (checkConnectivity()) {
@@ -235,17 +251,14 @@ class TunnelVpnService : VpnService() {
                     delay(CHECK_INTERVAL_MS)
                     misses = if (checkConnectivity()) 0 else misses + 1
                 }
+                // Lost mid-use: internet is cut inside the tunnel, the apps stay open.
                 markDropped(name)
             } else {
                 failures++
-                when (TunnelState.status.value.phase) {
-                    Phase.CONNECTING -> if (failures >= INITIAL_ATTEMPTS) {
-                        XrayCore.stop()
-                        enterGuard(getString(R.string.error_server_unreachable))
-                        return
-                    }
-                    Phase.RECONNECTING -> pauseAppsAfterGrace()
-                    else -> Unit
+                if (mode == SessionMode.USER && TunnelState.status.value.phase == Phase.CONNECTING && failures >= INITIAL_ATTEMPTS) {
+                    XrayCore.stop()
+                    enterGuard(getString(R.string.error_server_unreachable), pause = store.pauseWhenDisconnected.value)
+                    return
                 }
             }
             delay(backoff)
@@ -257,39 +270,35 @@ class TunnelVpnService : VpnService() {
 
     // ---- state changes --------------------------------------------------------
 
-    private fun enterGuard(error: String? = null) {
+    /** Not connected. The TUN stays up (no internet); the apps are paused only if [pause]. */
+    private fun enterGuard(error: String? = null, pause: Boolean) {
         if (ensureTun() == null) {
-            setStatus { TunnelStatus(phase = Phase.OFF, error = error ?: getString(R.string.error_vpn_permission)) }
+            setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = error ?: getString(R.string.error_vpn_permission)) }
             return
         }
-        Policy.setAllSuspended(this, true)
-        setStatus { TunnelStatus(phase = Phase.GUARDING, error = error, appsPaused = true) }
+        val update = {
+            setStatus {
+                TunnelStatus(phase = Phase.GUARDING, error = error, appsPaused = pause || it.appsPaused)
+            }
+        }
+        if (pause) AppGate.closeAll(this, update) else update()
     }
 
     private fun markConnected(name: String) {
-        Policy.setAllSuspended(this, false)
-        setStatus {
-            TunnelStatus(
-                phase = Phase.CONNECTED,
-                serverName = name,
-                connectedSince = System.currentTimeMillis(),
-                appsPaused = false,
-            )
+        AppGate.open(this) {
+            setStatus {
+                TunnelStatus(
+                    phase = Phase.CONNECTED,
+                    serverName = name,
+                    connectedSince = System.currentTimeMillis(),
+                    appsPaused = false,
+                )
+            }
         }
     }
 
     private fun markDropped(name: String) {
-        droppedAt = System.currentTimeMillis()
         setStatus { it.copy(phase = Phase.RECONNECTING, serverName = name, connectedSince = null, error = null) }
-    }
-
-    /** Short drops only cut the internet; if the drop lasts, the apps are paused too. */
-    private fun pauseAppsAfterGrace() {
-        val status = TunnelState.status.value
-        if (!status.appsPaused && System.currentTimeMillis() - droppedAt >= PAUSE_GRACE_MS) {
-            Policy.setAllSuspended(this, true)
-            setStatus { it.copy(appsPaused = true) }
-        }
     }
 
     private fun setStatus(transform: (TunnelStatus) -> TunnelStatus) {
