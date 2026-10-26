@@ -118,7 +118,7 @@
     <string name="settings_unknown_sources_desc">Needed to copy apps into the secure space.</string>
     <string name="settings_version">Version</string>
     <string name="settings_how_title">How does it work?</string>
-    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• If the server stops answering and “Automatic server switch” is on, another working server from your list takes over.\n• Subscriptions are refreshed automatically every 12 hours.\n• Apps marked “Always openable” can be opened while disconnected, but have no internet.\n• Your normal apps (outside the secure space) are not affected.</string>
+    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• If the server stops answering and “Automatic server switch” is on, another working server from your list takes over.\n• If “Automatic subscription update” is on, subscriptions are refreshed every 12 hours.\n• Apps marked “Always openable” can be opened while disconnected, but have no internet.\n• Your normal apps (outside the secure space) are not affected.</string>
     <string name="msg_subscription_updated_skipped">Subscription “%1$s” updated (%2$d servers; %3$d not supported).</string>
     <string name="msg_personal_app_missing">TunnelLock outside the secure space was not found.</string>
     <string name="clone_title">Add apps to the secure space</string>
@@ -168,6 +168,9 @@
     <string name="tile_disconnected">TunnelLock: disconnected</string>
     <string name="tile_open_space">Opening the secure space; tap connect there this time. From then on the tile works directly.</string>
     <string name="tile_failed">TunnelLock tile failed: %1$s</string>
-    <string name="hub_add_tile">Add the connect tile to Quick Settings</string>
+    <string name="hub_tile">Connect tile in Quick Settings</string>
+    <string name="hub_tile_desc">Adds a TunnelLock tile to Quick Settings (the panel at the top of the screen) that connects or disconnects with one tap.</string>
+    <string name="settings_auto_update">Automatic subscription update</string>
+    <string name="settings_auto_update_desc">Subscriptions not updated for more than 12 hours are refreshed when you open the app or while you are connected.</string>
     <string name="hub_tile_added">The TunnelLock tile is in Quick Settings.</string>
 </resources>

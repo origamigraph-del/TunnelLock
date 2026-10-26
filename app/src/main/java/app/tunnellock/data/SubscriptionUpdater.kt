@@ -34,8 +34,9 @@ object SubscriptionUpdater {
         }
     }
 
-    /** Refreshes the subscriptions not updated in the last [MAX_AGE_MS]. */
+    /** Refreshes the subscriptions not updated in the last [MAX_AGE_MS], if the user turned that on. */
     suspend fun updateStale(store: AppStore) {
+        if (!store.autoUpdateSubscriptions.value) return
         val now = System.currentTimeMillis()
         val stale = store.subscriptions.value.filter { now - it.updatedAt > MAX_AGE_MS }
         if (stale.isEmpty()) return

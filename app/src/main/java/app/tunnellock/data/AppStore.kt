@@ -63,9 +63,13 @@ class AppStore(context: Context) {
     private val _pauseWhenDisconnected = MutableStateFlow(prefs.getBoolean(KEY_PAUSE_WHEN_DISCONNECTED, true))
     val pauseWhenDisconnected: StateFlow<Boolean> = _pauseWhenDisconnected
 
-    /** When the server stops answering, switch to the fastest other server that works. */
-    private val _failover = MutableStateFlow(prefs.getBoolean(KEY_FAILOVER, true))
+    /** When the server stops answering, switch to the fastest other server that works. Off by default. */
+    private val _failover = MutableStateFlow(prefs.getBoolean(KEY_FAILOVER, false))
     val failover: StateFlow<Boolean> = _failover
+
+    /** Refresh subscriptions older than 12 hours in the background. Off by default. */
+    private val _autoUpdateSubscriptions = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE_SUBSCRIPTIONS, false))
+    val autoUpdateSubscriptions: StateFlow<Boolean> = _autoUpdateSubscriptions
 
     @Synchronized
     fun addServers(parsed: List<ParsedServer>, subscriptionId: String? = null): Int {
@@ -131,6 +135,11 @@ class AppStore(context: Context) {
     fun setFailover(enabled: Boolean) {
         _failover.value = enabled
         prefs.edit().putBoolean(KEY_FAILOVER, enabled).apply()
+    }
+
+    fun setAutoUpdateSubscriptions(enabled: Boolean) {
+        _autoUpdateSubscriptions.value = enabled
+        prefs.edit().putBoolean(KEY_AUTO_UPDATE_SUBSCRIPTIONS, enabled).apply()
     }
 
     @Synchronized
@@ -229,5 +238,6 @@ class AppStore(context: Context) {
         const val KEY_AUTO_CONNECT = "autoConnect"
         const val KEY_PAUSE_WHEN_DISCONNECTED = "pauseWhenDisconnected"
         const val KEY_FAILOVER = "failover"
+        const val KEY_AUTO_UPDATE_SUBSCRIPTIONS = "autoUpdateSubscriptions"
     }
 }
