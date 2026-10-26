@@ -72,6 +72,9 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
         val NEED_OK = Regex("""^>NEED-OK:Need '([^']+)' confirmation(?: MSG:(.*))?$""")
         val PASSWORD_NEED = Regex("""^>PASSWORD:Need '([^']+)' (username/password|password)""")
         val TIMESTAMP = Regex("""^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d """)
+
+        /** OpenVPN echoes management commands; it hides the password but not the username. */
+        val USERNAME_ECHO = Regex("""(CMD 'username '[^']*' ).*""")
         val TUN_REQUESTS = setOf("IFCONFIG", "IFCONFIG6", "ROUTE", "ROUTE6", "DNSSERVER", "DNS6SERVER", "DNSDOMAIN")
     }
 
@@ -406,7 +409,9 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
 
     private fun readOutput(process: Process) {
         runCatching {
-            process.inputStream.bufferedReader().forEachLine { AppLog.i(TAG, it.replace(TIMESTAMP, "")) }
+            process.inputStream.bufferedReader().forEachLine {
+                AppLog.i(TAG, it.replace(TIMESTAMP, "").replace(USERNAME_ECHO, "$1[...]'"))
+            }
         }
     }
 
