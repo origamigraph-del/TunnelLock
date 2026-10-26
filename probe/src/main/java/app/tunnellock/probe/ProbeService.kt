@@ -64,6 +64,8 @@ class ProbeService : Service() {
                     val started = System.currentTimeMillis()
                     val results = Checks.runAll()
                     ProbeState.record(this@ProbeService, results)
+                    // Internet works right now: a good moment for logs that could not be sent before.
+                    if (results.any { it.reached }) ProbeState.flushOutbox(this@ProbeService)
                     ProbeState.last.value?.let { last ->
                         val text = getString(R.string.status_line, last.verdict.name, last.summary)
                         notify(notification(text))

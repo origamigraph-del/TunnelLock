@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -114,13 +115,41 @@ object ProbeState {
         return lines.drop(start).joinToString("\n")
     }
 
-    /** Sends [text] to the developer in the background and notes the outcome in the log. */
+    private val flushing = AtomicBoolean(false)
+
+    /**
+     * Queues [text] for the developer and tries to send it. A test usually ends
+     * while the VPN is down (no internet), so whatever fails stays in the outbox
+     * and goes out with [flushOutbox] once the internet is back.
+     */
     fun sendInBackground(context: Context, text: String) {
         val app = context.applicationContext
+        val outbox = File(app.filesDir, "outbox").apply { mkdirs() }
+        runCatching { File(outbox, "${System.currentTimeMillis()}.log").writeText(text) }
+        flushOutbox(app)
+    }
+
+    /** Sends queued logs, oldest first. Cheap to call often: no-op while sending or when empty. */
+    fun flushOutbox(context: Context) {
+        if (!ProbeReport.available) return
+        val app = context.applicationContext
+        val pending = File(app.filesDir, "outbox").listFiles()?.sortedBy { it.name }.orEmpty()
+        if (pending.isEmpty() || !flushing.compareAndSet(false, true)) return
         Thread {
-            ProbeReport.send(app, text)
-                .onSuccess { log(app, "-- log sent to the developer") }
-                .onFailure { log(app, "-- sending the log failed: ${it.message}") }
+            try {
+                for (file in pending) {
+                    val result = ProbeReport.send(app, file.readText())
+                    if (result.isSuccess) {
+                        file.delete()
+                        log(app, "-- log sent to the developer")
+                    } else {
+                        log(app, "-- log not sent yet (${result.exceptionOrNull()?.message}); will retry when online")
+                        break
+                    }
+                }
+            } finally {
+                flushing.set(false)
+            }
         }.start()
     }
 
