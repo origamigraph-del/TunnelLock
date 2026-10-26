@@ -1,6 +1,6 @@
 # TunnelLock
 
-اپ اندروید **بدون نیاز به روت** که اپ‌های انتخابی شما را فقط و فقط از طریق VPN (V2Ray / Xray) به اینترنت وصل می‌کند.
+اپ اندروید **بدون نیاز به روت** که اپ‌های انتخابی شما را فقط و فقط از طریق VPN (V2Ray / Xray یا OpenVPN) به اینترنت وصل می‌کند.
 اگر VPN حتی یک لحظه قطع شود، اینترنت آن اپ‌ها قطع است؛ اپ بسته نمی‌شود و با برگشتن اتصال دوباره کار می‌کند.
 
 ## چطور کار می‌کند (حالت سخت‌گیرانه)
@@ -12,6 +12,13 @@
 - قطع شدن اتصال وسط کار هیچ‌وقت اپ را نمی‌بندد؛ فقط اینترنتش قطع می‌شود.
 - وقتی خودتان VPN را قطع می‌کنید (یا گوشی تازه روشن شده و هنوز وصل نیست)، اپ‌ها با `setPackagesSuspended` متوقف می‌شوند و باز نمی‌شوند. این رفتار در تنظیمات قابل خاموش کردن است.
 - اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.
+
+### OpenVPN
+
+- در بخش سرورها «فایل OpenVPN» را بزنید و فایل `.ovpn` را باز کنید (یا متن آن را کپی و «از کلیپ‌بورد» را بزنید).
+- اگر سرور نام کاربری و رمز بخواهد، همان موقع پرسیده می‌شود و فقط داخل فضای امن ذخیره می‌شود. بعداً با دکمهٔ ✎ کنار سرور قابل ویرایش است.
+- گواهی‌ها و کلیدها باید داخل خود فایل باشند (inline). حالت TAP پشتیبانی نمی‌شود.
+- kill switch همان است: تا OpenVPN واقعاً وصل نشده، تونل خود TunnelLock همه‌چیز را مسدود نگه می‌دارد، و تونل OpenVPN هم کل IPv4 و IPv6 را می‌گیرد.
 
 ## نصب
 
@@ -46,22 +53,24 @@ TunnelLock (تنظیمات › گزارش‌ها › ارسال) و TunnelProbe 
 | مسیر | توضیح |
 |---|---|
 | `core/` | Kotlin خالص: پارسر لینک‌ها و سازندهٔ کانفیگ Xray (تست‌شده) |
-| `app/.../vpn/` | `TunnelVpnService` (تونل + kill switch)، wrapper هستهٔ Xray |
+| `app/.../vpn/` | `TunnelVpnService` (تونل + kill switch)، wrapper هستهٔ Xray، `OpenVpnEngine` |
+| `native/` | ساخت OpenVPN برای اندروید از سورس‌های قفل‌شده (فقط در CI) |
 | `app/.../strict/` | فضای امن: provisioning، lockdown، تعلیق و کپی اپ‌ها |
 | `app/.../ui/` | رابط کاربری (Jetpack Compose، فارسی/انگلیسی) |
 | `probe/` | TunnelProbe: اپ تست نشت |
 | `docs/PLAN.md` | پلن کامل پروژه |
 
 هستهٔ Xray از [AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite) گرفته می‌شود (همان هستهٔ v2rayNG). CI آن را با checksum ثابت دانلود می‌کند.
+OpenVPN 2.6 (با OpenSSL، LZO و LZ4) را CI از سورس‌هایی با commit ثابت می‌سازد (`native/build-openvpn.sh`) و به‌صورت `libovpnexec.so` داخل APK می‌گذارد.
 
 ## Build
 
 Builds run on GitHub Actions (`.github/workflows/build.yml`): every push to `main` runs the core tests, builds a signed release APK and publishes it as a pre-release.
 
-Locally: put `libv2ray.aar` (see the workflow for version and SHA-256) in `app/libs/`, then `./gradlew :core:test :app:assembleRelease`.
+Locally: put `libv2ray.aar` (see the workflow for version and SHA-256) in `app/libs/`, build OpenVPN with `native/build-openvpn.sh <android-ndk> app/src/main/jniLibs`, then `./gradlew :core:test :app:assembleRelease`.
 
 **Signing:** `signing/release.jks` is the release key, encrypted with a password that lives only in the `SIGNING_PASSWORD` repository secret (Settings › Secrets and variables › Actions). Every build must use this key so it can update the installed app in place; a new key would mean uninstalling, which deletes the secure space. Without the secret, CI still builds (debug-signed) but does not publish a release.
 
 ## License note
 
-Xray-core is MPL-2.0. If OpenVPN support is added later (GPLv2), public distribution will require publishing the source under the GPL.
+Xray-core is MPL-2.0. OpenVPN is GPLv2 (with the OpenSSL exception); it runs as a separate program that the app talks to over its management socket. Distributing the APK publicly requires offering OpenVPN's source (the pinned upstream release) under the GPL.

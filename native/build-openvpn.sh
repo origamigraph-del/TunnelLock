@@ -157,9 +157,10 @@ for ABI in arm64-v8a armeabi-v7a; do
         -e 's|^#define TARGET_LINUX 1$|#define TARGET_ANDROID 1|' \
         -e 's|^#define ENABLE_SITNL 1$|/* ENABLE_SITNL: no netlink on Android */|' \
         -e 's|^#define HAVE_LIBCAPNG 1$|/* HAVE_LIBCAPNG: not on Android */|' \
+        -e 's|^#define ENABLE_FEATURE_TUN_PERSIST 1$|/* ENABLE_FEATURE_TUN_PERSIST: --mktun is Linux-only */|' \
         "$config"
     grep -q '^#define TARGET_ANDROID 1$' "$config" || { echo "::error::config.h has no Linux target to replace"; exit 1; }
-    if grep -qE '^#define (TARGET_LINUX|ENABLE_SITNL|HAVE_LIBCAPNG|ENABLE_DCO) ' "$config"; then
+    if grep -qE '^#define (TARGET_LINUX|ENABLE_SITNL|HAVE_LIBCAPNG|ENABLE_DCO|ENABLE_FEATURE_TUN_PERSIST) ' "$config"; then
         echo "::error::config.h still has Linux-only settings"
         exit 1
     fi
