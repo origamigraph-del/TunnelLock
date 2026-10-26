@@ -5,7 +5,9 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.UserManager
 import android.util.Log
@@ -36,12 +38,6 @@ object Policy {
         val dpm = dpm(context)
         val admin = admin(context)
         runCatching { dpm.setProfileName(admin, context.getString(R.string.profile_name)) }
-        // Work profiles forbid installing apps by default; copying apps in needs it.
-        listOf(
-            UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
-            UserManager.DISALLOW_INSTALL_APPS,
-            UserManager.DISALLOW_UNINSTALL_APPS,
-        ).forEach { restriction -> runCatching { dpm.clearUserRestriction(admin, restriction) } }
         if (Build.VERSION.SDK_INT >= 33) {
             runCatching {
                 dpm.setPermissionGrantState(
@@ -52,8 +48,40 @@ object Policy {
                 )
             }
         }
-        enforceLockdown(context)
+        ensurePolicies(context)
         runCatching { dpm.setProfileEnabled(admin) }
+    }
+
+    /**
+     * Everything the secure space needs, re-applied on every start so profiles
+     * created by older versions get new rules too. Idempotent.
+     */
+    fun ensurePolicies(context: Context) {
+        if (!isProfileOwner(context)) return
+        val dpm = dpm(context)
+        val admin = admin(context)
+        // Work profiles forbid installing apps by default; copying apps in needs it.
+        listOf(
+            UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+            UserManager.DISALLOW_INSTALL_APPS,
+            UserManager.DISALLOW_UNINSTALL_APPS,
+        ).forEach { restriction -> runCatching { dpm.clearUserRestriction(admin, restriction) } }
+        // Let the personal copy of TunnelLock hand over the apps the user picked.
+        runCatching {
+            dpm.clearCrossProfileIntentFilters(admin)
+            dpm.addCrossProfileIntentFilter(
+                admin,
+                IntentFilter(CloneActivity.ACTION_CLONE_APPS).apply { addCategory(Intent.CATEGORY_DEFAULT) },
+                DevicePolicyManager.FLAG_PARENT_CAN_ACCESS_MANAGED,
+            )
+        }.onFailure { Log.e(TAG, "cross-profile filter failed", it) }
+        // Disabled in the manifest so the personal copy never answers the hand-over itself.
+        context.packageManager.setComponentEnabledSetting(
+            ComponentName(context, CloneActivity::class.java),
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP,
+        )
+        if (!isLockdownActive(context)) enforceLockdown(context)
     }
 
     /**
@@ -81,11 +109,40 @@ object Policy {
         }
     }
 
-    /** User apps installed in the secure space, except TunnelLock itself. These are the protected apps. */
-    fun protectedPackages(context: Context): List<String> =
-        context.packageManager.getInstalledApplications(0)
-            .filter { it.flags and ApplicationInfo.FLAG_SYSTEM == 0 && it.packageName != context.packageName }
-            .map { it.packageName }
+    /**
+     * The protected apps: user apps installed in the secure space (except
+     * TunnelLock itself) plus the system apps the user added.
+     */
+    fun protectedApps(context: Context): List<ApplicationInfo> {
+        val addedSystem = addedSystemApps(context)
+        return context.packageManager.getInstalledApplications(0).filter {
+            it.packageName != context.packageName &&
+                (it.flags and ApplicationInfo.FLAG_SYSTEM == 0 || it.packageName in addedSystem)
+        }
+    }
+
+    fun protectedPackages(context: Context): List<String> = protectedApps(context).map { it.packageName }
+
+    /** System apps cannot be installed from an APK; the profile owner switches them on instead. */
+    fun enableSystemApp(context: Context, pkg: String) {
+        dpm(context).enableSystemApp(admin(context), pkg)
+        runCatching { dpm(context).setApplicationHidden(admin(context), pkg, false) }
+        prefs(context).edit().putStringSet(KEY_SYSTEM_APPS, addedSystemApps(context) + pkg).apply()
+    }
+
+    fun removeSystemApp(context: Context, pkg: String) {
+        runCatching { dpm(context).setApplicationHidden(admin(context), pkg, true) }
+        prefs(context).edit().putStringSet(KEY_SYSTEM_APPS, addedSystemApps(context) - pkg).apply()
+    }
+
+    fun isAddedSystemApp(context: Context, pkg: String) = pkg in addedSystemApps(context)
+
+    private fun addedSystemApps(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_SYSTEM_APPS, emptySet()).orEmpty()
+
+    private fun prefs(context: Context) = context.getSharedPreferences("tunnellock", Context.MODE_PRIVATE)
+
+    private const val KEY_SYSTEM_APPS = "addedSystemApps"
 
     fun setSuspended(context: Context, packages: List<String>, suspended: Boolean) {
         if (packages.isEmpty() || !isProfileOwner(context)) return

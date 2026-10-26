@@ -157,6 +157,31 @@ class LinkParserTest {
     }
 
     @Test
+    fun hysteria2WithObfsAndPortHopping() {
+        val p = LinkParser.parse(
+            "hysteria2://pass%3Aword@hy.example:443,20000-30000/?sni=sni.example&obfs=salamander&obfs-password=ob&insecure=1#hy",
+        )
+        assertEquals(Protocol.HYSTERIA2, p.protocol)
+        assertEquals("pass:word", p.secret)
+        assertEquals(443, p.port)
+        assertEquals("hysteria", p.stream.network)
+        assertEquals("tls", p.stream.security)
+        assertEquals("sni.example", p.stream.sni)
+        assertEquals(listOf("h3"), p.stream.alpn)
+        assertEquals("ob", p.stream.obfsPassword)
+        assertEquals(Protocol.HYSTERIA2, LinkParser.parse("hy2://a@h.example:8443#x").protocol)
+    }
+
+    @Test
+    fun reportCountsUnsupportedLines() {
+        val report = LinkParser.parseReport(
+            "vless://u@a.example:443#a\ntuic://x@b.example:443#b\ntuic://y@c.example:443#c\nnot a link",
+        )
+        assertEquals(1, report.servers.size)
+        assertEquals(mapOf("tuic" to 2, "other" to 1), report.skipped)
+    }
+
+    @Test
     fun unknownLinesAreSkipped() {
         assertTrue(LinkParser.parseMany("hello\nworld").isEmpty())
     }

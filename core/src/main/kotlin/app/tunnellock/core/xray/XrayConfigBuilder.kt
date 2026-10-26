@@ -152,9 +152,23 @@ object XrayConfigBuilder {
                     ),
                 )
             }
+            Protocol.HYSTERIA2 -> {
+                o.put("protocol", "hysteria")
+                o.put("settings", JSONObject().put("version", 2).put("address", p.address).put("port", p.port))
+            }
             Protocol.CUSTOM -> error("Custom profiles carry their own outbounds")
         }
-        if (p.protocol != Protocol.SHADOWSOCKS) o.put("streamSettings", streamSettings(p.stream))
+        if (p.protocol != Protocol.SHADOWSOCKS) {
+            val stream = streamSettings(p.stream)
+            if (p.protocol == Protocol.HYSTERIA2) {
+                stream.put("hysteriaSettings", JSONObject().put("version", 2).put("auth", p.secret))
+                p.stream.obfsPassword?.let { password ->
+                    val salamander = JSONObject().put("type", "salamander").put("settings", JSONObject().put("password", password))
+                    stream.put("finalmask", JSONObject().put("udp", JSONArray().put(salamander)))
+                }
+            }
+            o.put("streamSettings", stream)
+        }
         return o
     }
 
@@ -165,6 +179,7 @@ object XrayConfigBuilder {
             "kcp" -> "kcp"
             "grpc" -> "grpc"
             "httpupgrade" -> "httpupgrade"
+            "hysteria" -> "hysteria"
             else -> "raw"
         }
         val o = JSONObject().put("network", network).put("security", s.security)

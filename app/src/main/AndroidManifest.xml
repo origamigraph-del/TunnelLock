@@ -28,6 +28,7 @@
         android:localeConfig="@xml/locales_config"
         android:supportsRtl="true"
         android:theme="@style/Theme.TunnelLock"
+        android:usesCleartextTraffic="true"
         tools:targetApi="34">
 
         <activity
@@ -50,6 +51,20 @@
             android:theme="@android:style/Theme.Translucent.NoTitleBar">
             <intent-filter>
                 <action android:name="android.app.action.PROVISIONING_SUCCESSFUL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Receives the apps picked in the personal profile. Disabled by default and
+             enabled only inside the secure space, so the personal copy of the app never
+             answers the hand-over itself and Android forwards it into the profile. -->
+        <activity
+            android:name=".strict.CloneActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="app.tunnellock.action.CLONE_APPS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>

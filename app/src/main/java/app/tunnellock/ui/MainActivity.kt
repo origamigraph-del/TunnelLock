@@ -17,6 +17,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         val inSecureSpace = Policy.isProfileOwner(this)
+        // Profiles created by older versions get the current rules too.
+        if (inSecureSpace) Policy.ensurePolicies(this)
         setContent {
             TunnelLockTheme {
                 if (inSecureSpace) MainScreen() else SetupScreen()

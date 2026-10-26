@@ -49,8 +49,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
 import app.tunnellock.data.StoredServer
 import app.tunnellock.data.Subscription
+import app.tunnellock.data.SubscriptionUsage
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
+import java.util.Locale
 
 @Composable
 fun ServersScreen(vm: MainViewModel) {
@@ -229,6 +231,21 @@ private fun ServerRow(server: StoredServer, selected: Boolean, onClick: () -> Un
 }
 
 @Composable
+private fun usageText(usage: SubscriptionUsage): String {
+    val used = gigabytes(usage.usedBytes)
+    val volume = if (usage.totalBytes > 0) {
+        stringResource(R.string.sub_usage_of, used, gigabytes(usage.totalBytes))
+    } else {
+        stringResource(R.string.sub_usage_unlimited, used)
+    }
+    if (usage.expiresAt <= 0) return volume
+    val days = ((usage.expiresAt * 1000 - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0)
+    return volume + " · " + stringResource(R.string.sub_days_left, days)
+}
+
+private fun gigabytes(bytes: Long) = ltr(String.format(Locale.US, "%.1f GB", bytes / 1_073_741_824.0))
+
+@Composable
 private fun Latency(ms: Long?) {
     if (ms == null) return
     val (text, color) = when {
@@ -252,6 +269,7 @@ private fun SubscriptionRow(sub: Subscription, busy: Boolean, onUpdate: () -> Un
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                sub.usage?.let { usage -> Text(usageText(usage), style = MaterialTheme.typography.bodySmall) }
             }
             if (busy) {
                 CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)

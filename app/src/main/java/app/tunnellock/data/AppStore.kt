@@ -27,6 +27,16 @@ data class Subscription(
     val name: String,
     val url: String,
     val updatedAt: Long = 0,
+    /** From the panel's Subscription-Userinfo header, when it sends one. */
+    val usage: SubscriptionUsage? = null,
+)
+
+data class SubscriptionUsage(
+    val usedBytes: Long,
+    /** 0 = unlimited. */
+    val totalBytes: Long,
+    /** Unix seconds, 0 = never. */
+    val expiresAt: Long,
 )
 
 /** Small persistent store (SharedPreferences + JSON). Lives in the secure-space copy of the app. */
@@ -65,13 +75,13 @@ class AppStore(context: Context) {
 
     /** Replaces a subscription's servers, keeping the selection when a server with the same link survives. */
     @Synchronized
-    fun replaceSubscriptionServers(subscriptionId: String, parsed: List<ParsedServer>) {
+    fun replaceSubscriptionServers(subscriptionId: String, parsed: List<ParsedServer>, usage: SubscriptionUsage?) {
         val selectedLink = _servers.value.find { it.id == _selectedId.value }?.link
         val fresh = parsed.map { it.toStored(subscriptionId) }
         saveServers(_servers.value.filter { it.subscriptionId != subscriptionId } + fresh)
         fresh.find { it.link == selectedLink }?.let { select(it.id) }
         _subscriptions.value = _subscriptions.value.map {
-            if (it.id == subscriptionId) it.copy(updatedAt = System.currentTimeMillis()) else it
+            if (it.id == subscriptionId) it.copy(updatedAt = System.currentTimeMillis(), usage = usage ?: it.usage) else it
         }
         saveSubscriptions(_subscriptions.value)
     }
@@ -168,7 +178,11 @@ class AppStore(context: Context) {
         _subscriptions.value = list
         val array = JSONArray()
         list.forEach {
-            array.put(JSONObject().put("id", it.id).put("name", it.name).put("url", it.url).put("updatedAt", it.updatedAt))
+            val o = JSONObject().put("id", it.id).put("name", it.name).put("url", it.url).put("updatedAt", it.updatedAt)
+            it.usage?.let { u ->
+                o.put("used", u.usedBytes).put("total", u.totalBytes).put("expires", u.expiresAt)
+            }
+            array.put(o)
         }
         prefs.edit().putString(KEY_SUBSCRIPTIONS, array.toString()).apply()
     }
@@ -177,7 +191,12 @@ class AppStore(context: Context) {
         val array = runCatching { JSONArray(prefs.getString(KEY_SUBSCRIPTIONS, "[]")) }.getOrElse { JSONArray() }
         return (0 until array.length()).mapNotNull { i ->
             val o = array.optJSONObject(i) ?: return@mapNotNull null
-            Subscription(o.optString("id"), o.optString("name"), o.optString("url"), o.optLong("updatedAt"))
+            val usage = if (o.has("used")) {
+                SubscriptionUsage(o.optLong("used"), o.optLong("total"), o.optLong("expires"))
+            } else {
+                null
+            }
+            Subscription(o.optString("id"), o.optString("name"), o.optString("url"), o.optLong("updatedAt"), usage)
         }
     }
 
