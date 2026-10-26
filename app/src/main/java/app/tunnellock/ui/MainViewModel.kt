@@ -1,19 +1,23 @@
 package app.tunnellock.ui
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.CrossProfileApps
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import app.tunnellock.BuildConfig
 import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.parser.LinkParser
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
+import app.tunnellock.data.AppLog
 import app.tunnellock.data.StoredServer
 import app.tunnellock.data.Subscription
-import app.tunnellock.strict.AppCloner
-import app.tunnellock.strict.AppItem
-import app.tunnellock.strict.InstallEvent
+import app.tunnellock.data.SubscriptionFetcher
 import app.tunnellock.strict.Policy
 import app.tunnellock.vpn.TunnelState
 import app.tunnellock.vpn.TunnelVpnService
@@ -30,9 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import java.io.IOException
-import java.net.HttpURLConnection
-import java.net.URL
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TunnelLockApp
@@ -42,29 +43,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages
 
-    private val _apps = MutableStateFlow<List<AppItem>?>(null)
-    val apps: StateFlow<List<AppItem>?> = _apps
-
-    private val _installing = MutableStateFlow<Set<String>>(emptySet())
-    val installing: StateFlow<Set<String>> = _installing
+    private val _protectedApps = MutableStateFlow<List<ProtectedApp>?>(null)
+    val protectedApps: StateFlow<List<ProtectedApp>?> = _protectedApps
 
     private val _testing = MutableStateFlow(false)
     val testing: StateFlow<Boolean> = _testing
 
     private val _updating = MutableStateFlow<Set<String>>(emptySet())
     val updating: StateFlow<Set<String>> = _updating
-
-    init {
-        viewModelScope.launch {
-            AppCloner.events.collect { event ->
-                when (event) {
-                    is InstallEvent.Installed -> say(R.string.msg_app_added, event.label)
-                    is InstallEvent.Failed -> say(R.string.msg_app_add_failed, event.label, event.reason)
-                }
-                refreshApps()
-            }
-        }
-    }
 
     private fun say(res: Int, vararg args: Any) {
         _messages.tryEmit(app.getString(res, *args))
@@ -93,13 +79,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             addSubscription(app.getString(R.string.subscription_default_name), trimmed)
             return
         }
-        val parsed = runCatching { LinkParser.parseAll(trimmed) }.getOrElse { emptyList() }
-        if (parsed.isEmpty()) {
-            val reason = runCatching { LinkParser.parse(trimmed); "" }.exceptionOrNull()?.message.orEmpty()
+        val report = runCatching { LinkParser.parseReport(trimmed) }.getOrNull()
+        if (report == null || report.servers.isEmpty()) {
+            val unsupported = report?.skipped?.filterKeys { it != "other" }
+            val reason = if (!unsupported.isNullOrEmpty()) {
+                "unsupported: " + unsupported.entries.joinToString { "${it.key}×${it.value}" }
+            } else {
+                runCatching { LinkParser.parse(trimmed); "" }.exceptionOrNull()?.message.orEmpty()
+            }
+            AppLog.w("Import", "nothing imported: $reason")
             say(R.string.msg_import_failed, reason)
             return
         }
-        val count = store.addServers(parsed)
+        val count = store.addServers(report.servers)
         say(R.string.msg_imported, count)
     }
 
@@ -145,13 +137,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _updating.update { it + sub.id }
         viewModelScope.launch {
             try {
-                val body = withContext(Dispatchers.IO) { fetch(sub.url) }
-                val parsed = LinkParser.parseAll(body)
-                if (parsed.isEmpty()) {
-                    say(R.string.msg_subscription_empty, sub.name)
+                val result = withContext(Dispatchers.IO) { SubscriptionFetcher.fetch(sub.url) }
+                store.replaceSubscriptionServers(sub.id, result.report.servers, result.usage)
+                val skipped = result.report.skipped.values.sum()
+                if (skipped > 0) {
+                    say(R.string.msg_subscription_updated_skipped, sub.name, result.report.servers.size, skipped)
                 } else {
-                    store.replaceSubscriptionServers(sub.id, parsed)
-                    say(R.string.msg_subscription_updated, sub.name, parsed.size)
+                    say(R.string.msg_subscription_updated, sub.name, result.report.servers.size)
                 }
             } catch (e: Exception) {
                 say(R.string.msg_subscription_failed, sub.name, e.message.orEmpty())
@@ -163,40 +155,43 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteSubscription(sub: Subscription) = store.removeSubscription(sub.id)
 
-    private fun fetch(url: String): String {
-        val connection = URL(url).openConnection() as HttpURLConnection
-        connection.connectTimeout = 15_000
-        connection.readTimeout = 20_000
-        connection.setRequestProperty("User-Agent", "TunnelLock/${BuildConfig.VERSION_NAME}")
-        try {
-            val code = connection.responseCode
-            if (code !in 200..299) throw IOException("HTTP $code")
-            return connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
     // ---- apps --------------------------------------------------------------
 
-    fun refreshApps() {
+    fun refreshProtectedApps() {
         viewModelScope.launch {
-            _apps.value = withContext(Dispatchers.IO) { AppCloner.listApps(app) }
+            _protectedApps.value = withContext(Dispatchers.IO) {
+                val pm = app.packageManager
+                Policy.protectedApps(app).map { info ->
+                    ProtectedApp(
+                        packageName = info.packageName,
+                        label = info.loadLabel(pm).toString(),
+                        info = info,
+                        system = Policy.isAddedSystemApp(app, info.packageName),
+                        paused = Policy.isSuspended(app, info.packageName),
+                    )
+                }.sortedBy { it.label.lowercase() }
+            }
         }
     }
 
-    fun addApp(item: AppItem) {
-        if (item.packageName in _installing.value) return
-        _installing.update { it + item.packageName }
-        viewModelScope.launch {
-            try {
-                withContext(Dispatchers.IO) { AppCloner.install(app, item) }
-            } catch (e: Exception) {
-                say(R.string.msg_app_add_failed, item.label, e.message.orEmpty())
-            } finally {
-                _installing.update { it - item.packageName }
-            }
+    fun removeApp(context: Context, item: ProtectedApp) {
+        if (item.system) {
+            Policy.removeSystemApp(app, item.packageName)
+            refreshProtectedApps()
+        } else {
+            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${item.packageName}")))
         }
+    }
+
+    /** Apps are picked in the personal copy of TunnelLock: only it can see the phone's apps. */
+    fun openPhoneApps(context: Context) {
+        val crossProfile = context.getSystemService(CrossProfileApps::class.java)
+        val personal = crossProfile.targetUserProfiles.firstOrNull()
+        if (personal == null) {
+            say(R.string.msg_personal_app_missing)
+            return
+        }
+        crossProfile.startMainActivity(ComponentName(context, MainActivity::class.java), personal)
     }
 
     // ---- settings ----------------------------------------------------------
@@ -210,3 +205,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         say(if (Policy.isLockdownActive(app)) R.string.msg_lockdown_ok else R.string.msg_lockdown_failed)
     }
 }
+
+data class ProtectedApp(
+    val packageName: String,
+    val label: String,
+    val info: ApplicationInfo,
+    /** A system app switched on in the secure space (removed by hiding, not uninstalling). */
+    val system: Boolean,
+    val paused: Boolean,
+)

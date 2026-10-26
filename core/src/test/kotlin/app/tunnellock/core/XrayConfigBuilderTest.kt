@@ -99,6 +99,21 @@ class XrayConfigBuilderTest {
     }
 
     @Test
+    fun hysteria2Outbound() {
+        val proxy = build("hysteria2://secret@hy.example:443?sni=s.example&obfs=salamander&obfs-password=ob#h")
+            .getJSONArray("outbounds").getJSONObject(0)
+        assertEquals("hysteria", proxy.getString("protocol"))
+        assertEquals(2, proxy.getJSONObject("settings").getInt("version"))
+        val stream = proxy.getJSONObject("streamSettings")
+        assertEquals("hysteria", stream.getString("network"))
+        assertEquals("secret", stream.getJSONObject("hysteriaSettings").getString("auth"))
+        assertEquals("s.example", stream.getJSONObject("tlsSettings").getString("serverName"))
+        val mask = stream.getJSONObject("finalmask").getJSONArray("udp").getJSONObject(0)
+        assertEquals("salamander", mask.getString("type"))
+        assertEquals("ob", mask.getJSONObject("settings").getString("password"))
+    }
+
+    @Test
     fun testConfigHasNoInbounds() {
         val c = build("vless://u@a.example:443#a", CoreOptions(useTun = false))
         assertEquals(0, c.getJSONArray("inbounds").length())

@@ -12,6 +12,9 @@ class ParseException(message: String) : Exception(message)
 /** A parsed server plus the exact text it came from (kept so it can be stored and shared again). */
 data class ParsedServer(val profile: ServerProfile, val source: String)
 
+/** Result of reading many servers: what was understood, and how many lines of each kind were not. */
+data class ParseReport(val servers: List<ParsedServer>, val skipped: Map<String, Int>)
+
 /**
  * Parses share links (vless://, vmess://, trojan://, ss://), full Xray JSON
  * configs, and subscription bodies into [ServerProfile]s.
@@ -28,6 +31,7 @@ object LinkParser {
             "vmess" -> parseVmess(input)
             "trojan" -> parseTrojan(input)
             "ss" -> parseShadowsocks(input)
+            "hysteria2", "hy2" -> parseHysteria2(input)
             "" -> throw ParseException("Not a link")
             else -> throw ParseException("Unsupported link type: $scheme")
         }
@@ -41,32 +45,44 @@ object LinkParser {
     fun parseMany(text: String): List<ServerProfile> = parseAll(text).map { it.profile }
 
     /** Like [parseMany], but keeps the source text of every server. */
-    fun parseAll(text: String): List<ParsedServer> {
-        val input = text.trim().removePrefix("﻿")
-        if (input.isEmpty()) return emptyList()
+    fun parseAll(text: String): List<ParsedServer> = parseReport(text).servers
+
+    /** Parses everything it can and counts the lines it could not use, by link type. */
+    fun parseReport(text: String): ParseReport {
+        val input = text.trim().removePrefix("\uFEFF")
+        if (input.isEmpty()) return ParseReport(emptyList(), emptyMap())
         if (input.startsWith("[")) {
             val array = try {
                 JSONArray(input)
             } catch (e: Exception) {
                 throw ParseException("Invalid JSON array")
             }
-            return (0 until array.length()).mapNotNull { i ->
+            val servers = (0 until array.length()).mapNotNull { i ->
                 val source = array.optJSONObject(i)?.toString() ?: return@mapNotNull null
                 runCatching { ParsedServer(parseCustomJson(source), source) }.getOrNull()
             }
+            val skipped = array.length() - servers.size
+            return ParseReport(servers, if (skipped > 0) mapOf("json" to skipped) else emptyMap())
         }
-        if (input.startsWith("{")) return listOf(ParsedServer(parseCustomJson(input), input))
+        if (input.startsWith("{")) return ParseReport(listOf(ParsedServer(parseCustomJson(input), input)), emptyMap())
 
         val body = if (!input.contains("://")) {
             decodeBase64OrNull(input.filterNot { it.isWhitespace() }) ?: input
         } else {
             input
         }
-        return body.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .mapNotNull { line -> runCatching { ParsedServer(parse(line), line) }.getOrNull() }
-            .toList()
+        val servers = mutableListOf<ParsedServer>()
+        val skipped = linkedMapOf<String, Int>()
+        body.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.forEach { line ->
+            val parsed = runCatching { ParsedServer(parse(line), line) }.getOrNull()
+            if (parsed != null) {
+                servers += parsed
+            } else {
+                val kind = line.substringBefore("://", "").lowercase().takeIf { it.isNotEmpty() && it.length <= 12 } ?: "other"
+                skipped[kind] = (skipped[kind] ?: 0) + 1
+            }
+        }
+        return ParseReport(servers, skipped)
     }
 
     // ---- VLESS -------------------------------------------------------------
@@ -200,6 +216,28 @@ object LinkParser {
         )
     }
 
+    // ---- Hysteria2 ---------------------------------------------------------
+
+    private fun parseHysteria2(link: String): ServerProfile {
+        val uri = SimpleUri.parse(link)
+        val q = uri.query
+        return ServerProfile(
+            name = uri.fragment.ifEmpty { uri.host },
+            protocol = Protocol.HYSTERIA2,
+            address = uri.host,
+            port = uri.port,
+            secret = uri.userInfo,
+            stream = StreamConfig(
+                network = "hysteria",
+                security = "tls",
+                sni = (q["sni"] ?: q["peer"])?.takeIf { it.isNotEmpty() },
+                alpn = splitList(q["alpn"]).ifEmpty { listOf("h3") },
+                pinnedPeerCertSha256 = q["pinSHA256"]?.takeIf { it.isNotEmpty() },
+                obfsPassword = if (q["obfs"] == "salamander") q["obfs-password"]?.takeIf { it.isNotEmpty() } else null,
+            ),
+        )
+    }
+
     // ---- Xray JSON ---------------------------------------------------------
 
     private fun parseCustomJson(text: String): ServerProfile {
@@ -270,6 +308,7 @@ object LinkParser {
         "mkcp", "kcp" -> "kcp"
         "grpc", "gun" -> "grpc"
         "httpupgrade" -> "httpupgrade"
+        "hysteria" -> "hysteria"
         "h2", "http", "h3", "quic" -> throw ParseException("Transport \"$net\" was removed from Xray; use XHTTP")
         else -> throw ParseException("Unsupported transport: $net")
     }
@@ -357,7 +396,7 @@ internal data class SimpleUri(
                 host = value.substringBeforeLast(':')
                 portText = value.substringAfterLast(':', "")
             }
-            val port = portText.toIntOrNull()
+            val port = portText.takeWhile { it.isDigit() }.toIntOrNull()
             if (host.isEmpty() || port == null || port !in 1..65535) {
                 throw ParseException("Invalid server address: $hostPort")
             }

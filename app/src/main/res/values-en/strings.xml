@@ -46,7 +46,7 @@
     <string name="setup_step1">1. Tap “Create secure space” and confirm Android\'s screens.</string>
     <string name="setup_step2">2. TunnelLock opens inside the secure space (with a briefcase badge).</string>
     <string name="setup_step3">3. Under Servers, add a V2Ray link or a subscription link.</string>
-    <string name="setup_step4">4. Under Apps, add the apps you want to protect.</string>
+    <string name="setup_step4">4. Add apps to the secure space from this outer app (without the briefcase).</string>
     <string name="setup_step5">5. Tap connect.</string>
     <string name="setup_create">Create secure space</string>
     <string name="setup_open">Open secure space</string>
@@ -95,7 +95,7 @@
     <string name="dialog_add">Add</string>
     <string name="dialog_delete">Delete</string>
 
-    <string name="apps_hint">Every app in the secure space is protected: it reaches the internet only through the VPN, and loses it whenever the connection drops.</string>
+    <string name="apps_hint">Every app in the secure space is protected: it reaches the internet only through the VPN, and loses it whenever the connection drops. Pick new apps in the outer TunnelLock (without the briefcase).</string>
     <string name="apps_install_permission">To add apps, allow TunnelLock to install unknown apps.</string>
     <string name="apps_open_settings">Open settings</string>
     <string name="apps_search">Search apps</string>
@@ -119,4 +119,33 @@
     <string name="settings_version">Version</string>
     <string name="settings_how_title">How does it work?</string>
     <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• Your normal apps (outside the secure space) are not affected.</string>
+    <string name="msg_subscription_updated_skipped">Subscription “%1$s” updated (%2$d servers; %3$d not supported).</string>
+    <string name="msg_personal_app_missing">TunnelLock outside the secure space was not found.</string>
+    <string name="clone_title">Add apps to the secure space</string>
+    <string name="clone_hint">Android asks to confirm every install; tap “Install” in its window. Keep this screen open until it finishes.</string>
+    <string name="clone_done">Close</string>
+    <string name="clone_waiting">Waiting</string>
+    <string name="clone_working">Copying…</string>
+    <string name="clone_confirm">Waiting for install confirmation</string>
+    <string name="clone_done_item">Added</string>
+    <string name="clone_failed">Failed: %1$s</string>
+    <string name="hub_intro">The secure space is ready. Servers and the connection are in the TunnelLock inside the secure space (with the briefcase).</string>
+    <string name="hub_apps_title">Add apps to the secure space</string>
+    <string name="hub_apps_hint">Pick the apps that must only work through the VPN and tap add. A separate copy of each is installed in the secure space.</string>
+    <string name="hub_add_selected">Add %1$d apps to the secure space</string>
+    <string name="hub_send_failed">The secure space did not answer. Open the TunnelLock inside the secure space once, then try again.</string>
+    <string name="hub_in_space">In the secure space</string>
+    <string name="hub_system_app">System app</string>
+    <string name="apps_pending">%1$d apps waiting to be added.</string>
+    <string name="apps_continue">Continue</string>
+    <string name="apps_add_from_phone">Add apps from the phone</string>
+    <string name="apps_remove_confirm">Remove “%1$s” from the secure space?</string>
+    <string name="sub_usage_of">%1$s of %2$s used</string>
+    <string name="sub_usage_unlimited">%1$s used (unlimited)</string>
+    <string name="sub_days_left">%1$d days left</string>
+    <string name="settings_logs">Logs</string>
+    <string name="settings_logs_desc">For troubleshooting; you can copy and send them.</string>
+    <string name="logs_empty">No log entries yet.</string>
+    <string name="logs_copy">Copy</string>
+    <string name="logs_close">Close</string>
 </resources>

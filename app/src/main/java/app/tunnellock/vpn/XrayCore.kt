@@ -2,6 +2,7 @@ package app.tunnellock.vpn
 
 import android.content.Context
 import android.util.Log
+import app.tunnellock.data.AppLog
 import go.Seq
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
@@ -55,7 +56,7 @@ object XrayCore {
         override fun startup(): Long = 0
         override fun shutdown(): Long = 0
         override fun onEmitStatus(code: Long, message: String?): Long {
-            Log.i(TAG, "core[$code] $message")
+            AppLog.i(TAG, "core[$code] $message")
             return 0
         }
     }
