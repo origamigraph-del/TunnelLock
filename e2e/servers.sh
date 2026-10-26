@@ -13,6 +13,17 @@ OUT=$(cd "$(dirname "$0")" && pwd)/out
 OVPN_PASSWORD=${OVPN_PASSWORD:-e2e-secret-7}
 mkdir -p "$OUT"
 
+# Runs a command quietly; on failure shows its output as an annotation and stops.
+quiet() { # <title> <command...>
+    local title=$1 log
+    shift
+    log=$(mktemp)
+    if ! "$@" >"$log" 2>&1; then
+        echo "::error title=$title failed::$(tail -15 "$log" | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
+        exit 1
+    fi
+}
+
 start_xray() {
     nohup "$OUT/xray" run -c "$OUT/xray-server.json" >>"$OUT/xray.log" 2>&1 &
     echo $! >"$OUT/xray.pid"
@@ -26,7 +37,7 @@ stop_xray() {
 }
 
 start_openvpn() {
-    sudo openvpn --config "$OUT/server.conf" --daemon --writepid "$OUT/openvpn.pid" --log-append "$OUT/openvpn.log"
+    quiet "OpenVPN server start" sudo openvpn --config "$OUT/server.conf" --daemon --writepid "$OUT/openvpn.pid" --log-append "$OUT/openvpn.log"
     sleep 2
     sudo kill -0 "$(sudo cat "$OUT/openvpn.pid")" || { echo "::error title=OpenVPN server::did not start: $(sudo tail -5 "$OUT/openvpn.log")"; exit 1; }
 }
@@ -38,7 +49,7 @@ stop_openvpn() {
 
 setup() {
     # ---- Xray: the same core version as the app, built from source (Go verifies the module checksums).
-    GOBIN="$OUT/gobin" go install "$XRAY_SERVER_MODULE"
+    GOBIN="$OUT/gobin" quiet "Xray build" go install "$XRAY_SERVER_MODULE"
     cp "$OUT/gobin/main" "$OUT/xray"
     local uuid
     uuid=$(cat /proc/sys/kernel/random/uuid)
@@ -57,11 +68,14 @@ EOF
     start_xray
 
     # ---- OpenVPN: a throw-away CA, login checked by a script, traffic NATed to the internet.
-    sudo apt-get install -y -qq openvpn easy-rsa >/dev/null
+    quiet "apt-get update" sudo apt-get update -qq
+    quiet "OpenVPN install" sudo apt-get install -y -qq openvpn easy-rsa
     export EASYRSA_BATCH=1 EASYRSA_PKI="$OUT/pki" EASYRSA_REQ_CN=tunnellock-e2e
-    /usr/share/easy-rsa/easyrsa init-pki >/dev/null
-    /usr/share/easy-rsa/easyrsa build-ca nopass >/dev/null 2>&1
-    /usr/share/easy-rsa/easyrsa build-server-full server nopass >/dev/null 2>&1
+    # easy-rsa looks for its openssl config and x509-types next to where it runs.
+    local easyrsa_dir=/usr/share/easy-rsa
+    quiet "easy-rsa init-pki" bash -c "cd $easyrsa_dir && ./easyrsa init-pki"
+    quiet "easy-rsa build-ca" bash -c "cd $easyrsa_dir && ./easyrsa build-ca nopass"
+    quiet "easy-rsa server cert" bash -c "cd $easyrsa_dir && ./easyrsa build-server-full server nopass"
     cat >"$OUT/check-login.sh" <<EOF
 #!/bin/sh
 # OpenVPN passes a file with the username and the password on two lines.
@@ -88,13 +102,13 @@ auth-user-pass-verify $OUT/check-login.sh via-file
 status $OUT/openvpn-status.log 5
 verb 3
 EOF
-    sudo sysctl -qw net.ipv4.ip_forward=1
+    quiet "IP forwarding" sudo sysctl -qw net.ipv4.ip_forward=1
     local iface
     iface=$(ip route show default | awk '{print $5; exit}')
-    sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$iface" -j MASQUERADE
+    quiet "NAT" sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$iface" -j MASQUERADE
     # Docker on the runner sets the FORWARD policy to DROP.
-    sudo iptables -I FORWARD 1 -s 10.8.0.0/24 -j ACCEPT
-    sudo iptables -I FORWARD 1 -d 10.8.0.0/24 -j ACCEPT
+    quiet "Forward out" sudo iptables -I FORWARD 1 -s 10.8.0.0/24 -j ACCEPT
+    quiet "Forward in" sudo iptables -I FORWARD 1 -d 10.8.0.0/24 -j ACCEPT
     {
         echo "client"
         echo "dev tun"

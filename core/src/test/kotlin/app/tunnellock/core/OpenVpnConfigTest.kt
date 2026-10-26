@@ -23,6 +23,7 @@ class OpenVpnConfigTest {
         resolv-retry infinite
         nobind
         persist-key
+        auth-retry interact
         auth-user-pass /etc/openvpn/login.txt
         cipher AES-256-GCM
         script-security 2
@@ -114,12 +115,15 @@ class OpenVpnConfigTest {
         assertFalse(run.contains("script-security"))
         assertFalse(run.contains("update-resolv-conf"))
         assertFalse(run.contains("block-outside-dns"))
+        // A rejected login must end OpenVPN, not retry forever.
+        assertFalse(run.contains("auth-retry"))
         // Logging stays at a level that keeps details out of the app's log.
         assertFalse("verb 4" in lines)
         assertEquals(1, lines.count { it == "verb 3" })
         // Defaults are added only where missing.
         assertTrue("persist-tun" in lines)
         assertTrue("connect-retry 2 30" in lines)
+        assertTrue("server-poll-timeout 20" in lines)
         assertEquals(1, lines.count { it.startsWith("dev ") })
         assertTrue(run.contains("<ca>\n-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n-----END CERTIFICATE-----\n</ca>"))
         assertTrue(run.contains("<tls-crypt>"))

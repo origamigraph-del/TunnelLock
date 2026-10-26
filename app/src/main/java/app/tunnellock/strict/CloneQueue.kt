@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import androidx.core.content.IntentCompat
-import app.tunnellock.TunnelLockApp
 import app.tunnellock.data.AppLog
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -140,9 +139,7 @@ object CloneQueue {
         setStatus(pkg, if (success) CloneStatus.DONE else CloneStatus.FAILED, message)
         if (success) {
             AppLog.i(TAG, "$pkg added to the secure space")
-            // A new app is not in use yet; keep it closed while we are not connected.
-            val store = (context.applicationContext as TunnelLockApp).store
-            if (store.pauseWhenDisconnected.value) AppGate.closeIfDisconnected(context, listOf(pkg))
+            AppGate.closeNewApp(context, pkg)
         }
         processNext(context)
     }
