@@ -1,6 +1,7 @@
 package app.tunnellock.strict
 
 import android.content.Context
+import app.tunnellock.TunnelLockApp
 import app.tunnellock.vpn.Phase
 import app.tunnellock.vpn.TunnelState
 
@@ -37,6 +38,18 @@ object AppGate {
         when {
             value -> Policy.setSuspended(context, listOf(pkg), false)
             status.appsPaused && status.phase != Phase.CONNECTED -> Policy.setSuspended(context, listOf(pkg), true)
+        }
+    }
+
+    /**
+     * A newly added app is not in use yet: it is paused like the others when they
+     * are paused (and the setting is on), and left alone otherwise.
+     */
+    fun closeNewApp(context: Context, pkg: String) = synchronized(lock) {
+        val status = TunnelState.status.value
+        val store = (context.applicationContext as TunnelLockApp).store
+        if (store.pauseWhenDisconnected.value && status.appsPaused && status.phase != Phase.CONNECTED) {
+            Policy.setSuspended(context, listOf(pkg), true)
         }
     }
 

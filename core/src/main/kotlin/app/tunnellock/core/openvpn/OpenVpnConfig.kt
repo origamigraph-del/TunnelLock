@@ -27,6 +27,8 @@ object OpenVpnConfig {
         "user", "group", "mlock", "tmp-dir", "dev-node", "iproute", "lladdr", "engine", "askpass",
         // Higher levels can put connection details into the app's log.
         "verb",
+        // "interact"/"nointeract" retry a rejected login forever; the default stops.
+        "auth-retry",
         // TunnelLock's own management connection replaces any other.
         "management", "management-client", "management-query-passwords", "management-hold", "management-signal",
         "management-forget-disconnect", "management-external-key", "management-external-cert", "management-up-down",
@@ -135,6 +137,8 @@ object OpenVpnConfig {
         out.append("verb 3\n")
         // The default waits up to 5 minutes between attempts.
         if ("connect-retry" !in names) out.append("connect-retry 2 30\n")
+        // The default waits up to 2 minutes for a dead remote before trying the next one.
+        if ("server-poll-timeout" !in names) out.append("server-poll-timeout 20\n")
         return out.toString()
     }
 
