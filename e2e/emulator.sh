@@ -12,8 +12,14 @@ mkdir -p "$OUT"
 
 annotate() { sed -e 's/%/%25/g' | cut -c1-220 | sed ':a;N;$!ba;s/\n/%0A/g'; }
 
-yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "$IMAGE" emulator platform-tools >"$OUT/sdk.log" 2>&1 \
-    || { echo "::error title=Emulator image::$(tail -5 "$OUT/sdk.log" | annotate)"; exit 1; }
+# "yes" is cut off when sdkmanager is done, so the licence step's status says nothing;
+# whether the image is there afterwards is what counts.
+{ yes || true; } | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1
+"$SDK/cmdline-tools/latest/bin/sdkmanager" --install "$IMAGE" emulator platform-tools >"$OUT/sdk.log" 2>&1
+if [ ! -d "$SDK/system-images/android-$API/google_apis/x86_64" ]; then
+    echo "::error title=Emulator image::$(tr '\r' '\n' <"$OUT/sdk.log" | grep -v '^\s*$' | grep -v 'Loading\|\[=*' | tail -8 | annotate)"
+    exit 1
+fi
 echo no | "$SDK/cmdline-tools/latest/bin/avdmanager" create avd -n e2e -k "$IMAGE" -d pixel_5 --force >"$OUT/avd.log" 2>&1 \
     || { echo "::error title=AVD::$(tail -5 "$OUT/avd.log" | annotate)"; exit 1; }
 # A bigger data partition: two users and two apps with native libraries.
