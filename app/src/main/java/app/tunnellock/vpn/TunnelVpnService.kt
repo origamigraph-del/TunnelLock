@@ -216,7 +216,15 @@ class TunnelVpnService : VpnService() {
     private suspend fun handle(command: Command) {
         val phase = TunnelState.status.value.phase
         when (command) {
-            Command.Guard -> if (phase == Phase.OFF) enterGuard(pause = store.pauseWhenDisconnected.value)
+            // Opening the app while the service is not running (e.g. its process was killed):
+            // the same as a restart by the system, so the apps are not paused behind the user.
+            Command.Guard -> if (phase == Phase.OFF) {
+                if (store.autoConnect.value && store.selectedServer() != null) {
+                    startSession(SessionMode.RESTORE)
+                } else {
+                    enterGuard(pause = store.pauseWhenDisconnected.value)
+                }
+            }
             Command.SystemStart -> if (!phase.isActive) {
                 if (store.autoConnect.value && store.selectedServer() != null) {
                     // Possibly restarted while an app was in use: reconnect without touching the apps.
