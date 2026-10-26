@@ -2,7 +2,6 @@ package app.tunnellock.strict
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -10,7 +9,6 @@ import android.content.pm.CrossProfileApps
 import android.content.pm.LauncherApps
 import android.os.UserHandle
 import app.tunnellock.data.AppLog
-import app.tunnellock.ui.MainActivity
 
 /** An app installed in the personal profile. */
 data class PhoneApp(
@@ -82,26 +80,19 @@ object PhoneApps {
                 system = app.system,
             )
         }
-        val intent = CloneActivity.handOverIntent(targets)
-        val forwarder = context.packageManager.queryIntentActivities(intent, 0)
-            .firstOrNull { it.activityInfo.packageName != context.packageName }
-        if (forwarder != null) {
-            try {
-                intent.component = ComponentName(forwarder.activityInfo.packageName, forwarder.activityInfo.name)
-                context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            if (SecureSpace.forward(context, CloneActivity.handOverIntent(targets))) {
                 AppLog.i(TAG, "handed ${targets.size} apps to the secure space")
                 return SendResult.Sent
-            } catch (e: Exception) {
-                AppLog.w(TAG, "forwarding failed, trying the clipboard", e)
             }
-        } else {
             AppLog.w(TAG, "no forwarding route to the secure space yet, using the clipboard")
+        } catch (e: Exception) {
+            AppLog.w(TAG, "forwarding failed, trying the clipboard", e)
         }
         return try {
             val clipboard = context.getSystemService(ClipboardManager::class.java)
             clipboard.setPrimaryClip(ClipData.newPlainText(CloneActivity.CLIPBOARD_LABEL, CloneActivity.encode(targets)))
-            context.getSystemService(CrossProfileApps::class.java)
-                .startMainActivity(ComponentName(context, MainActivity::class.java), space)
+            SecureSpace.open(context, space)
             AppLog.i(TAG, "handed ${targets.size} apps over through the clipboard")
             SendResult.SentViaClipboard
         } catch (e: Exception) {

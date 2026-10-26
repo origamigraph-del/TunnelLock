@@ -3,6 +3,7 @@ package app.tunnellock.data
 import android.content.Context
 import android.os.Build
 import app.tunnellock.BuildConfig
+import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.report.LogUploader
 import app.tunnellock.strict.Policy
 import app.tunnellock.vpn.TunnelState
@@ -22,7 +23,12 @@ object LogSender {
                 if (inSecureSpace) {
                     val status = TunnelState.status.value
                     add("phase ${status.phase}, apps paused ${status.appsPaused}, lockdown ${Policy.isLockdownActive(context)}")
-                    add("protected apps: ${Policy.protectedPackages(context).size}")
+                    add("protected apps: ${Policy.protectedPackages(context).size}, always openable: ${Policy.neverPausePackages(context).size}")
+                    val store = (context.applicationContext as TunnelLockApp).store
+                    add(
+                        "servers ${store.servers.value.size}, subscriptions ${store.subscriptions.value.size}, " +
+                            "failover ${store.failover.value}, pause ${store.pauseWhenDisconnected.value}, auto-connect ${store.autoConnect.value}",
+                    )
                 }
             }
             val body = LogUploader.format("TunnelLock log", details, AppLog.text())

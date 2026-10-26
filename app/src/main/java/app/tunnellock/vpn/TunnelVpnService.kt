@@ -11,6 +11,7 @@ import android.net.Network
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.tunnellock.R
@@ -19,6 +20,8 @@ import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
 import app.tunnellock.data.AppStore
+import app.tunnellock.data.StoredServer
+import app.tunnellock.data.SubscriptionUpdater
 import app.tunnellock.strict.AppGate
 import app.tunnellock.strict.Policy
 import app.tunnellock.ui.MainActivity
@@ -26,11 +29,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 /**
  * The tunnel. The TUN interface stays up for the whole life of the service, so
@@ -43,6 +50,9 @@ import kotlinx.coroutines.launch
  * Losing the connection only cuts the internet; the apps stay open. They are
  * paused (cannot be opened) only when the user disconnects on purpose and the
  * "pause when disconnected" setting is on.
+ *
+ * If the server keeps failing, the other servers are tested outside the tunnel
+ * and the fastest one that works takes over (failover setting).
  */
 class TunnelVpnService : VpnService() {
 
@@ -60,6 +70,12 @@ class TunnelVpnService : VpnService() {
         private const val CHECK_INTERVAL_MS = 15_000L
         private const val INITIAL_ATTEMPTS = 3
         private const val MAX_BACKOFF_MS = 30_000L
+
+        /** Failed attempts on one server before the others are tested. */
+        private const val FAILOVER_AFTER = 3
+        private const val FAILOVER_CANDIDATES = 12
+        private const val FAILOVER_PARALLEL = 4
+        private const val SUBSCRIPTION_CHECK_MS = 60 * 60 * 1000L
 
         fun send(context: Context, action: String) {
             ContextCompat.startForegroundService(
@@ -97,6 +113,7 @@ class TunnelVpnService : VpnService() {
 
     @Volatile private var currentNetwork: Network? = null
     @Volatile private var networkKnown = false
+    private var lastSubscriptionCheck = 0L
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -201,8 +218,9 @@ class TunnelVpnService : VpnService() {
 
     private suspend fun startSession(mode: SessionMode) {
         stopSession()
-        val profile = store.selectedServer()?.let { store.profileOf(it) }
-        if (profile == null) {
+        val server = store.selectedServer()
+        val profile = server?.let { store.profileOf(it) }
+        if (server == null || profile == null) {
             enterGuard(getString(R.string.error_no_server), pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value)
             return
         }
@@ -212,7 +230,7 @@ class TunnelVpnService : VpnService() {
             return
         }
         val config = XrayConfigBuilder.build(profile, CoreOptions(mtu = MTU))
-        session = scope.launch { runSession(profile.name, config, fd, mode) }
+        session = scope.launch { runSession(server, config, fd, mode) }
     }
 
     private suspend fun stopSession() {
@@ -222,42 +240,66 @@ class TunnelVpnService : VpnService() {
     }
 
     /**
-     * Keeps one server connection alive. "Connected" (and letting the apps run)
+     * Keeps a server connection alive. "Connected" (and letting the apps run)
      * only happens after a real request went through the proxy.
      */
-    private suspend fun runSession(name: String, config: String, fd: Int, mode: SessionMode) {
+    private suspend fun runSession(first: StoredServer, firstConfig: String, fd: Int, mode: SessionMode) {
+        var server = first
+        var config = firstConfig
         if (mode == SessionMode.NETWORK) {
-            markDropped(name)
+            markDropped(server.name)
         } else {
-            setStatus { it.copy(phase = Phase.CONNECTING, serverName = name, connectedSince = null, error = null) }
+            setStatus { it.copy(phase = Phase.CONNECTING, serverName = server.name, connectedSince = null, error = null) }
         }
+        // Servers already given a chance since the last good connection (by link: ids change on refresh).
+        val tried = mutableSetOf(server.link)
         var failures = 0
         var backoff = 1_000L
         while (true) {
             val started = runCatching { XrayCore.start(this, config, fd) }
-            if (started.isFailure) {
-                // A broken config will not fix itself by retrying.
-                AppLog.w(TAG, "core start failed", started.exceptionOrNull())
-                XrayCore.stop()
-                enterGuard(
-                    getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()),
-                    pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value,
-                )
-                return
-            }
-            if (checkConnectivity()) {
-                markConnected(name)
+            started.exceptionOrNull()?.let { AppLog.w(TAG, "core start failed", it) }
+            if (started.isSuccess && checkConnectivity()) {
+                markConnected(server)
+                tried.clear()
+                tried += server.link
                 failures = 0
                 backoff = 1_000L
                 var misses = 0
                 while (misses < 2) {
                     delay(CHECK_INTERVAL_MS)
                     misses = if (checkConnectivity()) 0 else misses + 1
+                    if (misses == 0) refreshSubscriptionsIfDue()
                 }
                 // Lost mid-use: internet is cut inside the tunnel, the apps stay open.
-                markDropped(name)
+                markDropped(server.name)
             } else {
                 failures++
+                if (started.isFailure || failures % FAILOVER_AFTER == 0) {
+                    val next = findFallback(tried)
+                    if (next != null) {
+                        server = next.first
+                        config = next.second
+                        tried += server.link
+                        failures = 0
+                        backoff = 1_000L
+                        setStatus { it.copy(serverName = server.name) }
+                        continue
+                    }
+                    // Nothing else works right now: later rounds may try every server again.
+                    if (mode != SessionMode.USER) {
+                        tried.clear()
+                        tried += server.link
+                    }
+                }
+                if (started.isFailure) {
+                    // A broken config will not fix itself by retrying.
+                    XrayCore.stop()
+                    enterGuard(
+                        getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()),
+                        pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value,
+                    )
+                    return
+                }
                 if (mode == SessionMode.USER && TunnelState.status.value.phase == Phase.CONNECTING && failures >= INITIAL_ATTEMPTS) {
                     XrayCore.stop()
                     enterGuard(getString(R.string.error_server_unreachable), pause = store.pauseWhenDisconnected.value)
@@ -267,6 +309,60 @@ class TunnelVpnService : VpnService() {
             delay(backoff)
             backoff = (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
         }
+    }
+
+    /**
+     * Tests the servers not in [exclude] side by side, outside the tunnel, and
+     * returns the fastest one that works with its tunnel config. Null when
+     * failover is off, there is no network, or nothing works.
+     */
+    private suspend fun findFallback(exclude: Set<String>): Pair<StoredServer, String>? {
+        if (!store.failover.value || currentNetwork == null) return null
+        val candidates = store.servers.value
+            .filter { it.link !in exclude }
+            .sortedWith(compareBy({ latencyRank(it.latencyMs) }, { it.latencyMs ?: Long.MAX_VALUE }))
+            .mapNotNull { server -> store.profileOf(server)?.let { server to it } }
+            .take(FAILOVER_CANDIDATES)
+        if (candidates.isEmpty()) return null
+        AppLog.i(TAG, "failover: testing ${candidates.size} other servers")
+        val gate = Semaphore(FAILOVER_PARALLEL)
+        // Started in the service scope: a disconnect must not wait for tests stuck in native code.
+        val results = candidates.map { (server, profile) ->
+            scope.async {
+                gate.withPermit {
+                    val ms = runCatching {
+                        val test = XrayConfigBuilder.build(profile, CoreOptions(useTun = false))
+                        XrayCore.testServer(this@TunnelVpnService, test, TEST_URLS.first())
+                    }.getOrDefault(-1L)
+                    Triple(server, profile, ms)
+                }
+            }
+        }.awaitAll()
+        val working = results.filter { it.third >= 0 }
+        // When nothing answers the network is more likely at fault; keep the old results.
+        if (working.isNotEmpty()) results.forEach { store.setLatency(it.first.id, it.third) }
+        val best = working.minByOrNull { it.third }
+        if (best == null) {
+            AppLog.w(TAG, "failover: no other server answered")
+            return null
+        }
+        AppLog.i(TAG, "failover: ${working.size} answered, switching to the fastest (${best.third} ms)")
+        return runCatching { best.first to XrayConfigBuilder.build(best.second, CoreOptions(mtu = MTU)) }.getOrNull()
+    }
+
+    /** Tested and working first, then never tested, then failed. */
+    private fun latencyRank(latencyMs: Long?): Int = when {
+        latencyMs == null -> 1
+        latencyMs < 0 -> 2
+        else -> 0
+    }
+
+    /** Old subscriptions are refreshed while connected, when downloads are most likely to work. */
+    private fun refreshSubscriptionsIfDue() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastSubscriptionCheck != 0L && now - lastSubscriptionCheck < SUBSCRIPTION_CHECK_MS) return
+        lastSubscriptionCheck = now
+        scope.launch { SubscriptionUpdater.updateStale(store) }
     }
 
     private fun checkConnectivity(): Boolean {
@@ -291,17 +387,20 @@ class TunnelVpnService : VpnService() {
         if (pause) AppGate.closeAll(this, update) else update()
     }
 
-    private fun markConnected(name: String) {
+    private fun markConnected(server: StoredServer) {
+        // After a failover the working server becomes the selected one.
+        if (store.selectedServer()?.link != server.link) store.selectByLink(server.link)
         AppGate.open(this) {
             setStatus {
                 TunnelStatus(
                     phase = Phase.CONNECTED,
-                    serverName = name,
+                    serverName = server.name,
                     connectedSince = System.currentTimeMillis(),
                     appsPaused = false,
                 )
             }
         }
+        refreshSubscriptionsIfDue()
     }
 
     private fun markDropped(name: String) {
