@@ -29,6 +29,9 @@ data class LastRound(val verdict: Verdict, val summary: String, val time: Long)
 /** Results, counters, settings and the log of the probe. Shared by the service and the screen. */
 object ProbeState {
     private const val MAX_LINES = 3000
+
+    /** probe.log rolls over to probe.log.1 at this size: two files hold a full day at a 30 s interval. */
+    private const val MAX_FILE_BYTES = 3_000_000L
     private const val LEAK_CHANNEL = "leak"
     const val STATUS_CHANNEL = "probe"
 
@@ -71,6 +74,8 @@ object ProbeState {
 
     private fun logFile(context: Context) = File(context.filesDir, "probe.log")
 
+    private fun previousLogFile(context: Context) = File(context.filesDir, "probe.log.1")
+
     @Synchronized
     fun load(context: Context) {
         if (loaded) return
@@ -86,7 +91,11 @@ object ProbeState {
         runCatching {
             val file = logFile(context)
             file.appendText(line + "\n")
-            if (file.length() > 1_000_000) file.writeText(_lines.value.joinToString("\n", postfix = "\n"))
+            if (file.length() > MAX_FILE_BYTES) {
+                val previous = previousLogFile(context)
+                previous.delete()
+                file.renameTo(previous)
+            }
         }
     }
 
@@ -98,6 +107,7 @@ object ProbeState {
         baseline = emptySet()
         previousVerdict = null
         runCatching { logFile(context).delete() }
+        runCatching { previousLogFile(context).delete() }
     }
 
     @Synchronized
@@ -108,9 +118,12 @@ object ProbeState {
 
     fun text(lastLines: Int = 600): String = _lines.value.takeLast(lastLines).joinToString("\n")
 
-    /** The lines of the last test session (from its "probe started" line). */
-    fun sessionText(): String {
-        val lines = _lines.value
+    /** The whole last test session from the log files (from its "probe started" line), even a full day. */
+    @Synchronized
+    fun sessionText(context: Context): String {
+        val lines = listOf(previousLogFile(context), logFile(context))
+            .filter { it.exists() }
+            .flatMap { runCatching { it.readLines() }.getOrDefault(emptyList()) }
         val start = lines.indexOfLast { it.contains("-- probe started") }.coerceAtLeast(0)
         return lines.drop(start).joinToString("\n")
     }

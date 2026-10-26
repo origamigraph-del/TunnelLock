@@ -10,7 +10,10 @@ import app.tunnellock.vpn.TunnelState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Sends this app's log to the developer (a comment on the repo's log issue). */
+/**
+ * Sends this app's whole log (a full day fits) to the developer: comments on
+ * the repo's log issue, the newest lines readable and everything in compressed parts.
+ */
 object LogSender {
     val available: Boolean get() = BuildConfig.LOG_TOKEN.isNotEmpty()
 
@@ -31,8 +34,7 @@ object LogSender {
                     )
                 }
             }
-            val body = LogUploader.format("TunnelLock log", details, AppLog.text())
-            LogUploader.post(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, body)
+            LogUploader.postLog(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, "TunnelLock log", details, AppLog.fullText())
         }.onSuccess { AppLog.i("LogSender", "log sent") }
             .onFailure { AppLog.w("LogSender", "sending the log failed", it) }
     }
