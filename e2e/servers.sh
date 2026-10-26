@@ -70,11 +70,12 @@ EOF
     # ---- OpenVPN: a throw-away CA, login checked by a script, traffic NATed to the internet.
     quiet "apt-get update" sudo apt-get update -qq
     quiet "OpenVPN install" sudo apt-get install -y -qq openvpn easy-rsa
-    export EASYRSA_BATCH=1 EASYRSA_PKI="$OUT/pki" EASYRSA_REQ_CN=tunnellock-e2e
+    export EASYRSA_BATCH=1 EASYRSA_PKI="$OUT/pki"
     # easy-rsa looks for its openssl config and x509-types next to where it runs.
     local easyrsa_dir=/usr/share/easy-rsa
     quiet "easy-rsa init-pki" bash -c "cd $easyrsa_dir && ./easyrsa init-pki"
-    quiet "easy-rsa build-ca" bash -c "cd $easyrsa_dir && ./easyrsa build-ca nopass"
+    # The CA's name only: easy-rsa 3.1 refuses a preset name for the server certificate.
+    quiet "easy-rsa build-ca" bash -c "cd $easyrsa_dir && EASYRSA_REQ_CN=tunnellock-e2e ./easyrsa build-ca nopass"
     quiet "easy-rsa server cert" bash -c "cd $easyrsa_dir && ./easyrsa build-server-full server nopass"
     cat >"$OUT/check-login.sh" <<EOF
 #!/bin/sh
