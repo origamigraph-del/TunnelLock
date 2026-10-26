@@ -7,11 +7,16 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.CrossProfileApps
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
+import app.tunnellock.core.model.Protocol
+import app.tunnellock.core.openvpn.OpenVpnConfig
 import app.tunnellock.core.parser.LinkParser
+import app.tunnellock.core.parser.ParseException
+import app.tunnellock.core.parser.ParsedServer
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
@@ -34,6 +39,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.net.InetSocketAddress
+import java.net.Socket
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as TunnelLockApp
@@ -50,6 +59,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val testing: StateFlow<Boolean> = _testing
 
     val updating: StateFlow<Set<String>> = SubscriptionUpdater.updating
+
+    private val _loginRequest = MutableStateFlow<LoginRequest?>(null)
+
+    /** An OpenVPN server waiting for its login (new import or edit). */
+    val loginRequest: StateFlow<LoginRequest?> = _loginRequest
 
     init {
         // Opening the app is a good moment to refresh subscriptions older than 12 hours (if turned on).
@@ -83,6 +97,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             addSubscription(app.getString(R.string.subscription_default_name), trimmed)
             return
         }
+        if (OpenVpnConfig.looksLikeOvpn(trimmed)) {
+            importOvpn(trimmed, null)
+            return
+        }
         val report = runCatching { LinkParser.parseReport(trimmed) }.getOrNull()
         if (report == null || report.servers.isEmpty()) {
             val unsupported = report?.skipped?.filterKeys { it != "other" }
@@ -97,6 +115,78 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val count = store.addServers(report.servers)
         say(R.string.msg_imported, count)
+    }
+
+    /** Opens an .ovpn file picked by the user. */
+    fun importOvpnFile(uri: Uri) {
+        viewModelScope.launch {
+            val file = withContext(Dispatchers.IO) {
+                runCatching {
+                    val name = app.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { c -> if (c.moveToFirst()) c.getString(0) else null }
+                    val text = app.contentResolver.openInputStream(uri)?.use { input ->
+                        val out = ByteArrayOutputStream()
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            if (out.size() > MAX_OVPN_BYTES) throw IOException("file is too large for an .ovpn")
+                        }
+                        out.toString(Charsets.UTF_8.name())
+                    } ?: throw IOException("cannot open the file")
+                    name?.substringBeforeLast('.') to text
+                }
+            }
+            file.onSuccess { (name, text) -> importOvpn(text, name) }
+                .onFailure { say(R.string.msg_file_read_failed, it.message.orEmpty()) }
+        }
+    }
+
+    private fun importOvpn(text: String, name: String?) {
+        val parsed = try {
+            ParsedServer(OpenVpnConfig.parse(text, name), text.trim())
+        } catch (e: ParseException) {
+            AppLog.w("Import", "OpenVPN config not usable: ${e.message}")
+            say(R.string.msg_import_failed, e.message.orEmpty())
+            return
+        }
+        val needs = OpenVpnConfig.needs(text)
+        if (needs.credentials || needs.keyPassword) {
+            _loginRequest.value = LoginRequest(parsed.profile.name, needs.credentials, needs.keyPassword, parsed = parsed)
+        } else {
+            val stored = store.addOpenVpn(parsed, name, null, null, null)
+            say(R.string.msg_ovpn_imported, stored.name)
+        }
+    }
+
+    fun editLogin(server: StoredServer) {
+        val needs = runCatching { OpenVpnConfig.needs(server.link) }.getOrNull() ?: return
+        _loginRequest.value = LoginRequest(
+            name = server.name,
+            needsUser = needs.credentials || !needs.keyPassword,
+            needsKey = needs.keyPassword,
+            server = server,
+        )
+    }
+
+    fun submitLogin(request: LoginRequest, name: String, username: String, password: String, keyPassword: String) {
+        _loginRequest.value = null
+        if (request.parsed != null) {
+            val stored = store.addOpenVpn(request.parsed, name, username.trim(), password, keyPassword)
+            say(R.string.msg_ovpn_imported, stored.name)
+        } else if (request.server != null) {
+            store.setLogin(request.server.id, username.trim(), password, keyPassword)
+            say(R.string.msg_login_saved, request.server.name)
+            // A running connection picks up the new login by reconnecting.
+            if (store.selectedId.value == request.server.id && status.value.phase.isActive) {
+                TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+            }
+        }
+    }
+
+    fun dismissLogin() {
+        _loginRequest.value = null
     }
 
     fun select(server: StoredServer) {
@@ -117,13 +207,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 async {
                     gate.withPermit {
                         val profile = store.profileOf(server)
-                        val delay = if (profile == null) {
-                            -1L
-                        } else {
-                            val config = XrayConfigBuilder.build(profile, CoreOptions(useTun = false))
-                            XrayCore.testServer(app, config, "https://www.gstatic.com/generate_204")
+                        val delay = when {
+                            profile == null -> -1L
+                            // OpenVPN cannot be tested through Xray: a TCP server is at least reachable or not.
+                            profile.protocol == Protocol.OPENVPN -> if (profile.method == "tcp") tcpDelay(profile.address, profile.port) else null
+                            else -> {
+                                val config = XrayConfigBuilder.build(profile, CoreOptions(useTun = false))
+                                XrayCore.testServer(app, config, "https://www.gstatic.com/generate_204")
+                            }
                         }
-                        store.setLatency(server.id, delay)
+                        if (delay != null) store.setLatency(server.id, delay)
                     }
                 }
             }.awaitAll()
@@ -153,6 +246,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun deleteSubscription(sub: Subscription) = store.removeSubscription(sub.id)
+
+    private fun tcpDelay(host: String, port: Int): Long = runCatching {
+        val start = System.nanoTime()
+        Socket().use { it.connect(InetSocketAddress(host, port), 5_000) }
+        (System.nanoTime() - start) / 1_000_000
+    }.getOrDefault(-1L)
+
+    private companion object {
+        const val MAX_OVPN_BYTES = 1_000_000
+    }
 
     // ---- apps --------------------------------------------------------------
 
@@ -223,6 +326,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         say(if (Policy.isLockdownActive(app)) R.string.msg_lockdown_ok else R.string.msg_lockdown_failed)
     }
 }
+
+/** The OpenVPN login dialog: for a new server ([parsed]) or an existing one ([server]). */
+data class LoginRequest(
+    val name: String,
+    val needsUser: Boolean,
+    val needsKey: Boolean,
+    val parsed: ParsedServer? = null,
+    val server: StoredServer? = null,
+)
 
 data class ProtectedApp(
     val packageName: String,

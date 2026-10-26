@@ -77,7 +77,7 @@
     <string name="servers_scan">Scan QR</string>
     <string name="servers_subscription">Subscription</string>
     <string name="servers_test">Ping test</string>
-    <string name="servers_empty">No servers yet. Copy a vless, vmess, trojan or ss link and tap “From clipboard”, or add a subscription.</string>
+    <string name="servers_empty">No servers yet. Copy a vless, vmess, trojan or ss link and tap “From clipboard”, add a subscription, or open an OpenVPN file (.ovpn).</string>
     <string name="servers_subscriptions">Subscriptions</string>
     <string name="servers_list">Servers (%1$d)</string>
     <string name="servers_delete_confirm">Delete server “%1$s”?</string>
@@ -156,7 +156,7 @@
 
     <!-- Phase 2 -->
     <string name="settings_failover">Automatic server switch</string>
-    <string name="settings_failover_desc">If the current server fails several times in a row, the other servers in your list are tested and the fastest working one takes over. Apps stay without internet until the connection is back.</string>
+    <string name="settings_failover_desc">If the current server fails several times in a row, the other V2Ray servers in your list are tested and the fastest working one takes over. Apps stay without internet until the connection is back.</string>
     <string name="apps_options">Options</string>
     <string name="apps_never_pause">Always openable</string>
     <string name="apps_never_pause_desc">This app is never paused, so you can open it while disconnected. It still has no internet until you connect.</string>
@@ -173,4 +173,20 @@
     <string name="settings_auto_update">Automatic subscription update</string>
     <string name="settings_auto_update_desc">Subscriptions not updated for more than 12 hours are refreshed when you open the app or while you are connected.</string>
     <string name="hub_tile_added">The TunnelLock tile is in Quick Settings.</string>
+
+    <!-- OpenVPN -->
+    <string name="error_openvpn_start">OpenVPN did not start: %1$s</string>
+    <string name="error_openvpn_login">The OpenVPN server rejected the username or password. Edit the login in Servers.</string>
+    <string name="error_openvpn_stopped">OpenVPN stopped: %1$s</string>
+    <string name="servers_ovpn_file">OpenVPN file</string>
+    <string name="ovpn_login_title">OpenVPN login</string>
+    <string name="ovpn_login_hint">The username and password are stored only in this app, inside the secure space.</string>
+    <string name="ovpn_username">Username</string>
+    <string name="ovpn_password">Password</string>
+    <string name="ovpn_key_password">Private key password</string>
+    <string name="ovpn_edit_login">Edit login</string>
+    <string name="dialog_save">Save</string>
+    <string name="msg_ovpn_imported">OpenVPN server “%1$s” added.</string>
+    <string name="msg_login_saved">Login for “%1$s” saved.</string>
+    <string name="msg_file_read_failed">Could not read the file: %1$s</string>
 </resources>
