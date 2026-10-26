@@ -21,3 +21,4 @@ app/src/main/jniLibs/
 
 # Emulator test output (see e2e/)
 e2e/out/
+__pycache__/
