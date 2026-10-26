@@ -1,9 +1,12 @@
 package app.tunnellock.core.report
 
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.Base64
+import java.util.zip.GZIPOutputStream
 
 /**
  * Sends a log to the developer by posting it as a comment on a GitHub issue of
@@ -24,6 +27,37 @@ object LogUploader {
             append(trimmed.replace("```", "'''"))
             append("\n```\n")
         }
+    }
+
+    /**
+     * A log too long for one comment, as gzip + base64 in pieces that each fit
+     * one. Joined in order, they decode with `base64 -d | gunzip`.
+     */
+    fun compressedParts(log: String): List<String> {
+        val bytes = ByteArrayOutputStream()
+        GZIPOutputStream(bytes).use { it.write(log.toByteArray(Charsets.UTF_8)) }
+        return Base64.getEncoder().encodeToString(bytes.toByteArray()).chunked(MAX_LOG_CHARS)
+    }
+
+    fun formatPart(title: String, index: Int, total: Int, chunk: String): String = buildString {
+        append("### ").append(title).append(" — complete log, part ").append(index).append('/').append(total).append('\n')
+        append("gzip + base64: join all parts in order, then `base64 -d | gunzip`.\n\n```text\n")
+        append(chunk)
+        append("\n```\n")
+    }
+
+    /**
+     * Blocking. Posts a log: one readable comment (the details and the newest
+     * lines), plus the complete log in compressed parts when it does not fit.
+     * Returns the first comment's URL.
+     */
+    fun postLog(token: String, repo: String, issue: Int, title: String, details: List<String>, log: String): String {
+        val url = post(token, repo, issue, format(title, details, log))
+        if (log.length > MAX_LOG_CHARS) {
+            val parts = compressedParts(log)
+            parts.forEachIndexed { i, chunk -> post(token, repo, issue, formatPart(title, i + 1, parts.size, chunk)) }
+        }
+        return url
     }
 
     /** Blocking. Posts [body] on issue [issue] of [repo] ("owner/name"); returns the comment's URL. */

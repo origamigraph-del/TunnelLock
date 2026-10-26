@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Build
 import app.tunnellock.core.report.LogUploader
 
-/** Sends the probe log to the developer (a comment on the repo's log issue). */
+/** Sends the probe log to the developer (comments on the repo's log issue; long logs in compressed parts). */
 object ProbeReport {
     val available: Boolean get() = BuildConfig.LOG_TOKEN.isNotEmpty()
 
@@ -16,6 +16,6 @@ object ProbeReport {
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}",
             "home country ${ProbeState.homeCountry(context)}, real IP set: ${ProbeState.realIp(context).isNotEmpty()}",
         )
-        LogUploader.post(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, LogUploader.format("TunnelProbe log", details, log))
+        LogUploader.postLog(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, "TunnelProbe log", details, log)
     }
 }
