@@ -133,7 +133,7 @@
     <string name="hub_apps_title">Add apps to the secure space</string>
     <string name="hub_apps_hint">Pick the apps that must only work through the VPN and tap add. A separate copy of each is installed in the secure space.</string>
     <string name="hub_add_selected">Add %1$d apps to the secure space</string>
-    <string name="hub_send_failed">The secure space did not answer. Open the TunnelLock inside the secure space once, then try again.</string>
+    <string name="hub_send_failed">Sending to the secure space failed: %1$s</string>
     <string name="hub_in_space">In the secure space</string>
     <string name="hub_system_app">System app</string>
     <string name="apps_pending">%1$d apps waiting to be added.</string>
@@ -148,4 +148,5 @@
     <string name="logs_empty">No log entries yet.</string>
     <string name="logs_copy">Copy</string>
     <string name="logs_close">Close</string>
+    <string name="hub_logs_copied">Log copied.</string>
 </resources>

@@ -144,7 +144,7 @@
     <string name="hub_apps_title">افزودن اپ به فضای امن</string>
     <string name="hub_apps_hint">اپ‌هایی را که باید فقط با VPN کار کنند انتخاب کنید و «افزودن» را بزنید. یک نسخهٔ جدا از آن‌ها در فضای امن نصب می‌شود.</string>
     <string name="hub_add_selected">افزودن %1$d اپ به فضای امن</string>
-    <string name="hub_send_failed">فضای امن جواب نداد. یک بار TunnelLock داخل فضای امن را باز کنید و دوباره امتحان کنید.</string>
+    <string name="hub_send_failed">فرستادن به فضای امن ناموفق بود: %1$s</string>
     <string name="hub_in_space">در فضای امن هست</string>
     <string name="hub_system_app">اپ سیستمی</string>
     <string name="apps_pending">%1$d اپ منتظر افزودن است.</string>
@@ -159,4 +159,5 @@
     <string name="logs_empty">هنوز گزارشی نیست.</string>
     <string name="logs_copy">کپی</string>
     <string name="logs_close">بستن</string>
+    <string name="hub_logs_copied">گزارش کپی شد.</string>
 </resources>

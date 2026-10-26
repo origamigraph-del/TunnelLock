@@ -46,6 +46,8 @@ import app.tunnellock.data.AppLog
 import app.tunnellock.ui.NoticeCard
 import app.tunnellock.ui.theme.TunnelLockTheme
 import kotlinx.coroutines.launch
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Inside the secure space: receives the apps picked in the personal profile and
@@ -69,6 +71,41 @@ class CloneActivity : ComponentActivity() {
                 .putExtra(EXTRA_LABELS, targets.map { it.label }.toTypedArray())
                 .putExtra(EXTRA_PATHS, targets.map { it.paths.joinToString("\n") }.toTypedArray())
                 .putExtra(EXTRA_SYSTEM, targets.map { it.system }.toBooleanArray())
+
+        /** Label of the clipboard fallback (see [PhoneApps.send]). */
+        const val CLIPBOARD_LABEL = "app.tunnellock.handover"
+
+        /** Explicit intent to this activity inside the secure space, carrying [targets]. */
+        fun localIntent(context: android.content.Context, targets: List<CloneTarget>): Intent =
+            Intent(context, CloneActivity::class.java).putExtras(handOverIntent(targets))
+
+        fun encode(targets: List<CloneTarget>): String {
+            val array = JSONArray()
+            targets.forEach { t ->
+                array.put(
+                    JSONObject()
+                        .put("p", t.packageName)
+                        .put("l", t.label)
+                        .put("a", JSONArray(t.paths))
+                        .put("s", t.system),
+                )
+            }
+            return array.toString()
+        }
+
+        fun decode(text: String): List<CloneTarget> = runCatching {
+            val array = JSONArray(text)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                val paths = o.getJSONArray("a")
+                CloneTarget(
+                    packageName = o.getString("p"),
+                    label = o.getString("l"),
+                    paths = (0 until paths.length()).map { paths.getString(it) },
+                    system = o.getBoolean("s"),
+                )
+            }
+        }.getOrDefault(emptyList())
 
         private fun readTargets(intent: Intent): List<CloneTarget> {
             val packages = intent.getStringArrayExtra(EXTRA_PACKAGES) ?: return emptyList()
