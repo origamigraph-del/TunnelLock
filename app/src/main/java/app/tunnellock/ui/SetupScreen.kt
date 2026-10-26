@@ -1,6 +1,8 @@
 package app.tunnellock.ui
 
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.pm.CrossProfileApps
 import android.os.UserHandle
@@ -38,6 +40,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -57,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.tunnellock.R
+import app.tunnellock.data.AppLog
 import app.tunnellock.strict.PhoneApp
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
@@ -189,18 +193,34 @@ private fun PersonalHub(space: UserHandle) {
         apps = withContext(Dispatchers.IO) { PhoneApps.list(context) }
     }
     val sendFailed = stringResource(R.string.hub_send_failed)
+    val logsCopied = stringResource(R.string.hub_logs_copied)
 
     Scaffold(
-        topBar = { CenterAlignedTopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text(stringResource(R.string.app_name)) },
+                actions = {
+                    // The personal side has its own log (the hand-over happens here).
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        clipboard.setPrimaryClip(ClipData.newPlainText("TunnelLock log", AppLog.text()))
+                        scope.launch { snackbar.showSnackbar(logsCopied) }
+                    }) { Text(stringResource(R.string.settings_logs)) }
+                },
+            )
+        },
         bottomBar = {
             if (selected.isNotEmpty()) {
                 Button(
                     onClick = {
                         val chosen = apps.orEmpty().filter { it.packageName in selected }
-                        if (PhoneApps.send(context, chosen)) {
-                            selected = emptySet()
-                        } else {
-                            scope.launch { snackbar.showSnackbar(sendFailed) }
+                        when (val result = PhoneApps.send(context, space, chosen)) {
+                            is PhoneApps.SendResult.Failed -> {
+                                scope.launch { snackbar.showSnackbar(String.format(sendFailed, result.reason)) }
+                            }
+                            else -> {
+                                selected = emptySet()
+                            }
                         }
                     },
                     modifier = Modifier
