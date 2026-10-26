@@ -85,7 +85,7 @@
     <string name="servers_scan">اسکن QR</string>
     <string name="servers_subscription">لینک اشتراک</string>
     <string name="servers_test">تست پینگ</string>
-    <string name="servers_empty">هنوز سروری ندارید. لینک vless، vmess، trojan یا ss را کپی کنید و «از کلیپ‌بورد» را بزنید، یا لینک اشتراک اضافه کنید.</string>
+    <string name="servers_empty">هنوز سروری ندارید. لینک vless، vmess، trojan یا ss را کپی کنید و «از کلیپ‌بورد» را بزنید، لینک اشتراک اضافه کنید، یا فایل OpenVPN (.ovpn) را باز کنید.</string>
     <string name="servers_subscriptions">اشتراک‌ها</string>
     <string name="servers_list">سرورها (%1$d)</string>
     <string name="servers_delete_confirm">سرور «%1$s» حذف شود؟</string>
@@ -167,7 +167,7 @@
 
     <!-- Phase 2 -->
     <string name="settings_failover">تعویض خودکار سرور</string>
-    <string name="settings_failover_desc">اگر سرور فعلی چند بار پشت سر هم جواب ندهد، بقیهٔ سرورهای لیست تست می‌شوند و سریع‌ترین سرور سالم جایگزین می‌شود. تا وصل شدن دوباره، اپ‌ها همچنان اینترنت ندارند.</string>
+    <string name="settings_failover_desc">اگر سرور فعلی چند بار پشت سر هم جواب ندهد، بقیهٔ سرورهای V2Ray لیست تست می‌شوند و سریع‌ترین سرور سالم جایگزین می‌شود. تا وصل شدن دوباره، اپ‌ها همچنان اینترنت ندارند.</string>
     <string name="apps_options">گزینه‌ها</string>
     <string name="apps_never_pause">همیشه قابل باز شدن</string>
     <string name="apps_never_pause_desc">این اپ وقتی قطع هستید هم متوقف نمی‌شود و باز می‌شود، ولی تا وقتی وصل نشوید اینترنت ندارد.</string>
@@ -184,4 +184,20 @@
     <string name="settings_auto_update">به‌روزرسانی خودکار اشتراک‌ها</string>
     <string name="settings_auto_update_desc">اشتراک‌هایی که بیش از ۱۲ ساعت به‌روز نشده‌اند، موقع باز کردن برنامه یا وقتی وصل هستید خودکار به‌روز می‌شوند.</string>
     <string name="hub_tile_added">کاشی TunnelLock در تنظیمات سریع است.</string>
+
+    <!-- OpenVPN -->
+    <string name="error_openvpn_start">OpenVPN اجرا نشد: %1$s</string>
+    <string name="error_openvpn_login">سرور OpenVPN نام کاربری یا رمز را نپذیرفت. از بخش سرورها «ورود» را ویرایش کنید.</string>
+    <string name="error_openvpn_stopped">OpenVPN متوقف شد: %1$s</string>
+    <string name="servers_ovpn_file">فایل OpenVPN</string>
+    <string name="ovpn_login_title">ورود OpenVPN</string>
+    <string name="ovpn_login_hint">نام کاربری و رمز فقط در همین برنامه داخل فضای امن ذخیره می‌شوند.</string>
+    <string name="ovpn_username">نام کاربری</string>
+    <string name="ovpn_password">رمز عبور</string>
+    <string name="ovpn_key_password">رمز کلید خصوصی</string>
+    <string name="ovpn_edit_login">ویرایش ورود</string>
+    <string name="dialog_save">ذخیره</string>
+    <string name="msg_ovpn_imported">سرور OpenVPN «%1$s» اضافه شد.</string>
+    <string name="msg_login_saved">ورود «%1$s» ذخیره شد.</string>
+    <string name="msg_file_read_failed">خواندن فایل ناموفق بود: %1$s</string>
 </resources>

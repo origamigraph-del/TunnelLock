@@ -3,6 +3,7 @@ package app.tunnellock.ui
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,8 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -43,10 +46,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
+import app.tunnellock.core.model.Protocol
 import app.tunnellock.data.StoredServer
 import app.tunnellock.data.Subscription
 import app.tunnellock.data.SubscriptionUsage
@@ -62,6 +68,7 @@ fun ServersScreen(vm: MainViewModel) {
     val selectedId by vm.store.selectedId.collectAsStateWithLifecycle()
     val testing by vm.testing.collectAsStateWithLifecycle()
     val updating by vm.updating.collectAsStateWithLifecycle()
+    val loginRequest by vm.loginRequest.collectAsStateWithLifecycle()
 
     var showPaste by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
@@ -70,6 +77,10 @@ fun ServersScreen(vm: MainViewModel) {
 
     val scanner = rememberLauncherForActivityResult(ScanContract()) { result ->
         result.contents?.let(vm::importText)
+    }
+    // .ovpn files have no reliable MIME type, so any file can be picked.
+    val ovpnPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(vm::importOvpnFile)
     }
 
     Column(Modifier.fillMaxSize()) {
@@ -101,6 +112,7 @@ fun ServersScreen(vm: MainViewModel) {
                 label = { Text(stringResource(R.string.servers_scan)) },
             )
             AssistChip(onClick = { showSubscription = true }, label = { Text(stringResource(R.string.servers_subscription)) })
+            AssistChip(onClick = { ovpnPicker.launch(arrayOf("*/*")) }, label = { Text(stringResource(R.string.servers_ovpn_file)) })
             AssistChip(
                 onClick = vm::testAll,
                 enabled = !testing && servers.isNotEmpty(),
@@ -144,6 +156,11 @@ fun ServersScreen(vm: MainViewModel) {
                         server = server,
                         selected = server.id == selectedId,
                         onClick = { vm.select(server) },
+                        onEditLogin = if (server.protocol == Protocol.OPENVPN.label) {
+                            { vm.editLogin(server) }
+                        } else {
+                            null
+                        },
                         onDelete = { toDelete = server },
                     )
                 }
@@ -162,6 +179,13 @@ fun ServersScreen(vm: MainViewModel) {
             vm.addSubscription(name, url)
             showSubscription = false
         })
+    }
+    loginRequest?.let { request ->
+        OpenVpnLoginDialog(
+            request = request,
+            onDismiss = vm::dismissLogin,
+            onSave = { name, user, password, key -> vm.submitLogin(request, name, user, password, key) },
+        )
     }
     toDelete?.let { server ->
         ConfirmDialog(
@@ -203,7 +227,13 @@ fun SectionTitle(text: String) {
 }
 
 @Composable
-private fun ServerRow(server: StoredServer, selected: Boolean, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun ServerRow(
+    server: StoredServer,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onEditLogin: (() -> Unit)?,
+    onDelete: () -> Unit,
+) {
     val colors = if (selected) {
         CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     } else {
@@ -223,6 +253,11 @@ private fun ServerRow(server: StoredServer, selected: Boolean, onClick: () -> Un
                 )
             }
             Latency(server.latencyMs)
+            if (onEditLogin != null) {
+                IconButton(onClick = onEditLogin) {
+                    Icon(Icons.Filled.Edit, contentDescription = stringResource(R.string.ovpn_edit_login))
+                }
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.dialog_delete))
             }
@@ -337,6 +372,76 @@ private fun SubscriptionDialog(onDismiss: () -> Unit, onAdd: (String, String) ->
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+    )
+}
+
+@Composable
+private fun OpenVpnLoginDialog(
+    request: LoginRequest,
+    onDismiss: () -> Unit,
+    onSave: (name: String, username: String, password: String, keyPassword: String) -> Unit,
+) {
+    val existing = request.server
+    var name by remember(request) { mutableStateOf(request.name) }
+    var username by remember(request) { mutableStateOf(existing?.username.orEmpty()) }
+    var password by remember(request) { mutableStateOf(existing?.password.orEmpty()) }
+    var keyPassword by remember(request) { mutableStateOf(existing?.keyPassword.orEmpty()) }
+    val ready = (!request.needsUser || username.isNotBlank() && password.isNotEmpty()) &&
+        (!request.needsKey || keyPassword.isNotEmpty())
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ovpn_login_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.ovpn_login_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (request.parsed != null) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.dialog_sub_name)) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (request.needsUser) {
+                    OutlinedTextField(
+                        value = username,
+                        onValueChange = { username = it },
+                        singleLine = true,
+                        label = { Text(stringResource(R.string.ovpn_username)) },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    PasswordField(password, { password = it }, stringResource(R.string.ovpn_password))
+                }
+                if (request.needsKey) {
+                    PasswordField(keyPassword, { keyPassword = it }, stringResource(R.string.ovpn_key_password))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(name, username, password, keyPassword) }, enabled = ready) {
+                Text(stringResource(R.string.dialog_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+    )
+}
+
+@Composable
+private fun PasswordField(value: String, onValueChange: (String) -> Unit, label: String) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        label = { Text(label) },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 

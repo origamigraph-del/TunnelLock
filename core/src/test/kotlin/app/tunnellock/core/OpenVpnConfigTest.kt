@@ -114,9 +114,10 @@ class OpenVpnConfigTest {
         assertFalse(run.contains("script-security"))
         assertFalse(run.contains("update-resolv-conf"))
         assertFalse(run.contains("block-outside-dns"))
-        // The user's choices stay; defaults are added only where missing.
-        assertTrue("verb 4" in lines)
-        assertFalse("verb 3" in lines)
+        // Logging stays at a level that keeps details out of the app's log.
+        assertFalse("verb 4" in lines)
+        assertEquals(1, lines.count { it == "verb 3" })
+        // Defaults are added only where missing.
         assertTrue("persist-tun" in lines)
         assertTrue("connect-retry 2 30" in lines)
         assertEquals(1, lines.count { it.startsWith("dev ") })

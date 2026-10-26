@@ -34,9 +34,11 @@ step() { # <title> <log file> <command...>
     trap "$ON_ERROR" ERR
     if [ "$status" -ne 0 ]; then
         local excerpt
-        excerpt=$({ grep -E -i -m 30 'error|fatal|undefined|not found|No such file' "$log" || true
+        # Compiler and linker messages ("error:", "undefined symbol", "referenced by"),
+        # not file names such as error.o; long command lines are cut short.
+        excerpt=$({ grep -E -m 40 'error:|Error [0-9]|undefined (reference|symbol)|>>> referenced by|No such file|not found' "$log" || true
             echo "--- last lines ---"
-            tail -n 25 "$log"; } | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+            tail -n 12 "$log"; } | cut -c1-300 | sed -e 's/%/%25/g' -e 's/\r/%0D/g' | sed ':a;N;$!ba;s/\n/%0A/g')
         echo "::error title=$title failed::$excerpt"
         exit 1
     fi

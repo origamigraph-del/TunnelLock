@@ -13,13 +13,17 @@ import java.util.UUID
 data class StoredServer(
     val id: String,
     val name: String,
-    /** The original share link or Xray JSON; re-parsed whenever the server is used. */
+    /** The original share link, Xray JSON or .ovpn file; re-parsed whenever the server is used. */
     val link: String,
     val protocol: String,
     val address: String,
     val subscriptionId: String? = null,
     /** null = not tested, -1 = test failed. */
     val latencyMs: Long? = null,
+    /** OpenVPN login, entered by the user (never part of the config). */
+    val username: String? = null,
+    val password: String? = null,
+    val keyPassword: String? = null,
 )
 
 data class Subscription(
@@ -99,6 +103,37 @@ class AppStore(context: Context) {
             if (it.id == subscriptionId) it.copy(updatedAt = System.currentTimeMillis(), usage = usage ?: it.usage) else it
         }
         saveSubscriptions(_subscriptions.value)
+    }
+
+    /** Adds one OpenVPN server with the login the user entered. */
+    @Synchronized
+    fun addOpenVpn(parsed: ParsedServer, name: String?, username: String?, password: String?, keyPassword: String?): StoredServer {
+        val server = parsed.toStored(null).copy(
+            name = name?.trim()?.takeIf { it.isNotEmpty() } ?: parsed.profile.name,
+            username = username?.takeIf { it.isNotEmpty() },
+            password = password?.takeIf { it.isNotEmpty() },
+            keyPassword = keyPassword?.takeIf { it.isNotEmpty() },
+        )
+        saveServers(_servers.value + server)
+        if (_selectedId.value == null || _servers.value.none { it.id == _selectedId.value }) select(server.id)
+        return server
+    }
+
+    @Synchronized
+    fun setLogin(id: String, username: String?, password: String?, keyPassword: String?) {
+        saveServers(
+            _servers.value.map {
+                if (it.id != id) {
+                    it
+                } else {
+                    it.copy(
+                        username = username?.takeIf { v -> v.isNotEmpty() },
+                        password = password?.takeIf { v -> v.isNotEmpty() },
+                        keyPassword = keyPassword?.takeIf { v -> v.isNotEmpty() },
+                    )
+                }
+            },
+        )
     }
 
     @Synchronized
@@ -183,7 +218,10 @@ class AppStore(context: Context) {
                     .put("protocol", it.protocol)
                     .put("address", it.address)
                     .putOpt("subscriptionId", it.subscriptionId)
-                    .putOpt("latencyMs", it.latencyMs),
+                    .putOpt("latencyMs", it.latencyMs)
+                    .putOpt("username", it.username)
+                    .putOpt("password", it.password)
+                    .putOpt("keyPassword", it.keyPassword),
             )
         }
         prefs.edit().putString(KEY_SERVERS, array.toString()).apply()
@@ -201,6 +239,9 @@ class AppStore(context: Context) {
                 address = o.optString("address"),
                 subscriptionId = o.optString("subscriptionId").takeIf { it.isNotEmpty() },
                 latencyMs = if (o.has("latencyMs")) o.optLong("latencyMs") else null,
+                username = o.optString("username").takeIf { it.isNotEmpty() },
+                password = o.optString("password").takeIf { it.isNotEmpty() },
+                keyPassword = o.optString("keyPassword").takeIf { it.isNotEmpty() },
             )
         }
     }
