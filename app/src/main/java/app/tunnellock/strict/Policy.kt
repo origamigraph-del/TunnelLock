@@ -12,6 +12,8 @@ import android.os.Build
 import android.os.UserManager
 import android.util.Log
 import app.tunnellock.R
+import app.tunnellock.tile.ToggleActivity
+import app.tunnellock.tile.ToggleTileService
 
 /**
  * Everything that needs TunnelLock to be the owner of the secure space (a work profile).
@@ -66,19 +68,31 @@ object Policy {
             UserManager.DISALLOW_INSTALL_APPS,
             UserManager.DISALLOW_UNINSTALL_APPS,
         ).forEach { restriction -> runCatching { dpm.clearUserRestriction(admin, restriction) } }
-        // Let the personal copy of TunnelLock hand over the apps the user picked.
+        // Let the personal copy of TunnelLock hand over the apps the user picked,
+        // and connect or disconnect from its Quick Settings tile.
         runCatching {
             dpm.clearCrossProfileIntentFilters(admin)
-            dpm.addCrossProfileIntentFilter(
-                admin,
-                IntentFilter(CloneActivity.ACTION_CLONE_APPS).apply { addCategory(Intent.CATEGORY_DEFAULT) },
-                DevicePolicyManager.FLAG_PARENT_CAN_ACCESS_MANAGED,
-            )
+            listOf(CloneActivity.ACTION_CLONE_APPS, ToggleActivity.ACTION_TOGGLE).forEach { action ->
+                dpm.addCrossProfileIntentFilter(
+                    admin,
+                    IntentFilter(action).apply { addCategory(Intent.CATEGORY_DEFAULT) },
+                    DevicePolicyManager.FLAG_PARENT_CAN_ACCESS_MANAGED,
+                )
+            }
         }.onFailure { Log.e(TAG, "cross-profile filter failed", it) }
-        // Disabled in the manifest so the personal copy never answers the hand-over itself.
-        context.packageManager.setComponentEnabledSetting(
-            ComponentName(context, CloneActivity::class.java),
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+        // Disabled in the manifest so the personal copy never answers these intents itself.
+        val pm = context.packageManager
+        listOf(CloneActivity::class.java, ToggleActivity::class.java).forEach { activity ->
+            pm.setComponentEnabledSetting(
+                ComponentName(context, activity),
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                PackageManager.DONT_KILL_APP,
+            )
+        }
+        // The tile belongs to the personal side.
+        pm.setComponentEnabledSetting(
+            ComponentName(context, ToggleTileService::class.java),
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
             PackageManager.DONT_KILL_APP,
         )
         if (!isLockdownActive(context)) enforceLockdown(context)
@@ -145,10 +159,28 @@ object Policy {
     private fun prefs(context: Context) = context.getSharedPreferences("tunnellock", Context.MODE_PRIVATE)
 
     private const val KEY_SYSTEM_APPS = "addedSystemApps"
+    private const val KEY_NEVER_PAUSE = "neverPause"
+
+    /** Apps the user wants to open even while disconnected. Their internet is still cut. */
+    fun neverPausePackages(context: Context): Set<String> =
+        prefs(context).getStringSet(KEY_NEVER_PAUSE, emptySet()).orEmpty()
+
+    fun setNeverPause(context: Context, pkg: String, value: Boolean) {
+        val current = neverPausePackages(context)
+        prefs(context).edit().putStringSet(KEY_NEVER_PAUSE, if (value) current + pkg else current - pkg).apply()
+    }
+
+    /** Forgets the choice for apps that are no longer in the secure space. */
+    fun pruneNeverPause(context: Context, installed: Collection<String>) {
+        val current = neverPausePackages(context)
+        val kept = current.filter { it in installed }.toSet()
+        if (kept.size != current.size) prefs(context).edit().putStringSet(KEY_NEVER_PAUSE, kept).apply()
+    }
 
     fun setSuspended(context: Context, packages: List<String>, suspended: Boolean) {
-        // The leak-test tool keeps running (and logging) while disconnected; its traffic is still blocked.
-        val targets = if (suspended) packages - PROBE_PACKAGE else packages
+        // The leak-test tool keeps running (and logging) while disconnected, and so do the apps
+        // the user chose to keep openable; their traffic is still blocked.
+        val targets = if (suspended) packages - PROBE_PACKAGE - neverPausePackages(context) else packages
         if (targets.isEmpty() || !isProfileOwner(context)) return
         runCatching { dpm(context).setPackagesSuspended(admin(context), targets.toTypedArray(), suspended) }
             .onFailure { Log.e(TAG, "setPackagesSuspended failed", it) }

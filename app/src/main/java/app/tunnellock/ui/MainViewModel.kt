@@ -17,7 +17,8 @@ import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
 import app.tunnellock.data.StoredServer
 import app.tunnellock.data.Subscription
-import app.tunnellock.data.SubscriptionFetcher
+import app.tunnellock.data.SubscriptionUpdater
+import app.tunnellock.strict.AppGate
 import app.tunnellock.strict.Policy
 import app.tunnellock.vpn.TunnelState
 import app.tunnellock.vpn.TunnelVpnService
@@ -29,7 +30,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -49,8 +49,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _testing = MutableStateFlow(false)
     val testing: StateFlow<Boolean> = _testing
 
-    private val _updating = MutableStateFlow<Set<String>>(emptySet())
-    val updating: StateFlow<Set<String>> = _updating
+    val updating: StateFlow<Set<String>> = SubscriptionUpdater.updating
+
+    init {
+        // Opening the app is a good moment to refresh subscriptions older than 12 hours.
+        viewModelScope.launch { SubscriptionUpdater.updateStale(store) }
+    }
 
     private fun say(res: Int, vararg args: Any) {
         _messages.tryEmit(app.getString(res, *args))
@@ -133,22 +137,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun updateSubscription(sub: Subscription) {
-        if (sub.id in _updating.value) return
-        _updating.update { it + sub.id }
         viewModelScope.launch {
-            try {
-                val result = withContext(Dispatchers.IO) { SubscriptionFetcher.fetch(sub.url) }
-                store.replaceSubscriptionServers(sub.id, result.report.servers, result.usage)
+            val outcome = SubscriptionUpdater.update(store, sub) ?: return@launch
+            outcome.onSuccess { result ->
                 val skipped = result.report.skipped.values.sum()
                 if (skipped > 0) {
                     say(R.string.msg_subscription_updated_skipped, sub.name, result.report.servers.size, skipped)
                 } else {
                     say(R.string.msg_subscription_updated, sub.name, result.report.servers.size)
                 }
-            } catch (e: Exception) {
+            }.onFailure { e ->
                 say(R.string.msg_subscription_failed, sub.name, e.message.orEmpty())
-            } finally {
-                _updating.update { it - sub.id }
             }
         }
     }
@@ -161,16 +160,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _protectedApps.value = withContext(Dispatchers.IO) {
                 val pm = app.packageManager
-                Policy.protectedApps(app).map { info ->
+                val installed = Policy.protectedApps(app)
+                Policy.pruneNeverPause(app, installed.map { it.packageName })
+                val neverPause = Policy.neverPausePackages(app)
+                installed.map { info ->
                     ProtectedApp(
                         packageName = info.packageName,
                         label = info.loadLabel(pm).toString(),
                         info = info,
                         system = Policy.isAddedSystemApp(app, info.packageName),
                         paused = Policy.isSuspended(app, info.packageName),
+                        neverPause = info.packageName in neverPause,
                     )
                 }.sortedBy { it.label.lowercase() }
             }
+        }
+    }
+
+    fun setNeverPause(item: ProtectedApp, value: Boolean) {
+        viewModelScope.launch(Dispatchers.IO) {
+            AppGate.setNeverPause(app, item.packageName, value)
+            AppLog.i("Apps", "never-pause ${if (value) "on" else "off"} for one app")
+            refreshProtectedApps()
         }
     }
 
@@ -200,6 +211,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setPauseWhenDisconnected(enabled: Boolean) = store.setPauseWhenDisconnected(enabled)
 
+    fun setFailover(enabled: Boolean) = store.setFailover(enabled)
+
     fun reapplyPolicies() {
         Policy.finalizeProfile(app)
         say(if (Policy.isLockdownActive(app)) R.string.msg_lockdown_ok else R.string.msg_lockdown_failed)
@@ -213,4 +226,6 @@ data class ProtectedApp(
     /** A system app switched on in the secure space (removed by hiding, not uninstalling). */
     val system: Boolean,
     val paused: Boolean,
+    /** Can be opened while disconnected (still no internet). */
+    val neverPause: Boolean,
 )

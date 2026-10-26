@@ -118,7 +118,7 @@
     <string name="settings_unknown_sources_desc">Needed to copy apps into the secure space.</string>
     <string name="settings_version">Version</string>
     <string name="settings_how_title">How does it work?</string>
-    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• Your normal apps (outside the secure space) are not affected.</string>
+    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• If the server stops answering and “Automatic server switch” is on, another working server from your list takes over.\n• Subscriptions are refreshed automatically every 12 hours.\n• Apps marked “Always openable” can be opened while disconnected, but have no internet.\n• Your normal apps (outside the secure space) are not affected.</string>
     <string name="msg_subscription_updated_skipped">Subscription “%1$s” updated (%2$d servers; %3$d not supported).</string>
     <string name="msg_personal_app_missing">TunnelLock outside the secure space was not found.</string>
     <string name="clone_title">Add apps to the secure space</string>
@@ -153,4 +153,21 @@
     <string name="logs_sending">Sending…</string>
     <string name="logs_sent">Log sent.</string>
     <string name="logs_send_failed">Sending failed: %1$s</string>
+
+    <!-- Phase 2 -->
+    <string name="settings_failover">Automatic server switch</string>
+    <string name="settings_failover_desc">If the current server fails several times in a row, the other servers in your list are tested and the fastest working one takes over. Apps stay without internet until the connection is back.</string>
+    <string name="apps_options">Options</string>
+    <string name="apps_never_pause">Always openable</string>
+    <string name="apps_never_pause_desc">This app is never paused, so you can open it while disconnected. It still has no internet until you connect.</string>
+    <string name="apps_never_pause_badge">always openable</string>
+    <string name="apps_remove_from_space">Remove from secure space</string>
+    <string name="dialog_close">Close</string>
+    <string name="tile_subtitle">Connect / disconnect</string>
+    <string name="tile_connecting">TunnelLock: connecting…</string>
+    <string name="tile_disconnected">TunnelLock: disconnected</string>
+    <string name="tile_open_space">Opening the secure space; tap connect there this time. From then on the tile works directly.</string>
+    <string name="tile_failed">TunnelLock tile failed: %1$s</string>
+    <string name="hub_add_tile">Add the connect tile to Quick Settings</string>
+    <string name="hub_tile_added">The TunnelLock tile is in Quick Settings.</string>
 </resources>

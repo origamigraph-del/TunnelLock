@@ -69,6 +69,42 @@
             </intent-filter>
         </activity>
 
+        <!-- Connects or disconnects inside the secure space when the personal tile is tapped.
+             Disabled by default and enabled only inside the secure space, like CloneActivity. -->
+        <activity
+            android:name=".tile.ToggleActivity"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="app.tunnellock.action.TOGGLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Personal side of the tile: forwards the toggle into the secure space. -->
+        <activity
+            android:name=".tile.TileActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name=".tile.ToggleTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_notification"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".strict.AdminReceiver"
             android:description="@string/admin_description"

@@ -3,6 +3,7 @@ package app.tunnellock.ui
 import android.app.Activity
 import android.content.ComponentName
 import android.content.pm.CrossProfileApps
+import android.os.Build
 import android.os.UserHandle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +34,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -61,6 +63,7 @@ import app.tunnellock.R
 import app.tunnellock.strict.PhoneApp
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
+import app.tunnellock.tile.ToggleTileService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -190,6 +193,7 @@ private fun PersonalHub(space: UserHandle) {
         apps = withContext(Dispatchers.IO) { PhoneApps.list(context) }
     }
     val sendFailed = stringResource(R.string.hub_send_failed)
+    val tileAdded = stringResource(R.string.hub_tile_added)
     var showLogs by remember { mutableStateOf(false) }
     if (showLogs) LogsDialog(onDismiss = { showLogs = false })
 
@@ -242,6 +246,16 @@ private fun PersonalHub(space: UserHandle) {
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text(stringResource(R.string.setup_open)) }
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            OutlinedButton(
+                                onClick = {
+                                    ToggleTileService.requestAdd(context) { added ->
+                                        if (added) scope.launch { snackbar.showSnackbar(tileAdded) }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) { Text(stringResource(R.string.hub_add_tile)) }
+                        }
                     }
                 }
             }

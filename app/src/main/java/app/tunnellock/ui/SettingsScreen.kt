@@ -44,6 +44,7 @@ fun SettingsScreen(vm: MainViewModel) {
     val context = LocalContext.current
     val autoConnect by vm.store.autoConnect.collectAsStateWithLifecycle()
     val pauseWhenDisconnected by vm.store.pauseWhenDisconnected.collectAsStateWithLifecycle()
+    val failover by vm.store.failover.collectAsStateWithLifecycle()
     val xrayVersion by produceState("…") {
         value = withContext(Dispatchers.IO) { XrayCore.version(context) }
     }
@@ -65,6 +66,12 @@ fun SettingsScreen(vm: MainViewModel) {
             headlineContent = { Text(stringResource(R.string.settings_pause)) },
             supportingContent = { Text(stringResource(R.string.settings_pause_desc)) },
             trailingContent = { Switch(checked = pauseWhenDisconnected, onCheckedChange = vm::setPauseWhenDisconnected) },
+        )
+        HorizontalDivider()
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_failover)) },
+            supportingContent = { Text(stringResource(R.string.settings_failover_desc)) },
+            trailingContent = { Switch(checked = failover, onCheckedChange = vm::setFailover) },
         )
         HorizontalDivider()
         if (Build.VERSION.SDK_INT >= 33) {

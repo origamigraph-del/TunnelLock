@@ -27,6 +27,19 @@ object AppGate {
         Policy.setAllSuspended(context, true)
     }
 
+    /**
+     * Lets [pkg] be opened while disconnected (or not). The change applies right
+     * away: the app is un-paused, or paused again if the other apps are paused now.
+     */
+    fun setNeverPause(context: Context, pkg: String, value: Boolean) = synchronized(lock) {
+        Policy.setNeverPause(context, pkg, value)
+        val status = TunnelState.status.value
+        when {
+            value -> Policy.setSuspended(context, listOf(pkg), false)
+            status.appsPaused && status.phase != Phase.CONNECTED -> Policy.setSuspended(context, listOf(pkg), true)
+        }
+    }
+
     /** Pauses [packages] (all protected apps if null) unless the tunnel is connected right now. */
     fun closeIfDisconnected(context: Context, packages: List<String>? = null) = synchronized(lock) {
         if (TunnelState.status.value.phase == Phase.CONNECTED) return@synchronized

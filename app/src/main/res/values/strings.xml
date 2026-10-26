@@ -129,7 +129,7 @@
     <string name="settings_unknown_sources_desc">برای کپی کردن اپ‌ها به فضای امن لازم است.</string>
     <string name="settings_version">نسخه</string>
     <string name="settings_how_title">چطور کار می‌کند؟</string>
-    <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر اتصال وسط کار قطع شود، اپ باز می‌ماند و فقط اینترنتش قطع است؛ با برگشتن اتصال دوباره کار می‌کند.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی خودتان قطع می‌کنید (و گزینهٔ «متوقف کردن اپ‌ها» روشن است)، اپ‌های محافظت‌شده باز نمی‌شوند تا دوباره وصل شوید.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
+    <string name="settings_how_body">• اپ‌های داخل فضای امن فقط از طریق VPN این برنامه به اینترنت دسترسی دارند.\n• تا وقتی سرویس اجرا می‌شود، تونل همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ‌چیز از مسیر عادی خارج نمی‌شود.\n• اگر اتصال وسط کار قطع شود، اپ باز می‌ماند و فقط اینترنتش قطع است؛ با برگشتن اتصال دوباره کار می‌کند.\n• اگر خود برنامه بسته یا کشته شود، اندروید با «Always-on VPN» و «Block connections without VPN» اینترنت فضای امن را کاملاً قطع می‌کند.\n• وقتی خودتان قطع می‌کنید (و گزینهٔ «متوقف کردن اپ‌ها» روشن است)، اپ‌های محافظت‌شده باز نمی‌شوند تا دوباره وصل شوید.\n• اگر سرور جواب ندهد و «تعویض خودکار سرور» روشن باشد، سرور سالم دیگری از لیست جایگزین می‌شود.\n• اشتراک‌ها هر ۱۲ ساعت خودکار به‌روز می‌شوند.\n• اپ‌هایی که «همیشه قابل باز شدن» هستند وقتی قطع هستید هم باز می‌شوند، ولی اینترنت ندارند.\n• اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.</string>
     <string name="msg_subscription_updated_skipped">اشتراک «%1$s» به‌روز شد (%2$d سرور؛ %3$d مورد پشتیبانی نمی‌شود).</string>
     <string name="msg_personal_app_missing">TunnelLock بیرون از فضای امن پیدا نشد.</string>
     <string name="clone_title">افزودن اپ به فضای امن</string>
@@ -164,4 +164,21 @@
     <string name="logs_sending">در حال ارسال…</string>
     <string name="logs_sent">گزارش ارسال شد.</string>
     <string name="logs_send_failed">ارسال ناموفق بود: %1$s</string>
+
+    <!-- Phase 2 -->
+    <string name="settings_failover">تعویض خودکار سرور</string>
+    <string name="settings_failover_desc">اگر سرور فعلی چند بار پشت سر هم جواب ندهد، بقیهٔ سرورهای لیست تست می‌شوند و سریع‌ترین سرور سالم جایگزین می‌شود. تا وصل شدن دوباره، اپ‌ها همچنان اینترنت ندارند.</string>
+    <string name="apps_options">گزینه‌ها</string>
+    <string name="apps_never_pause">همیشه قابل باز شدن</string>
+    <string name="apps_never_pause_desc">این اپ وقتی قطع هستید هم متوقف نمی‌شود و باز می‌شود، ولی تا وقتی وصل نشوید اینترنت ندارد.</string>
+    <string name="apps_never_pause_badge">همیشه باز</string>
+    <string name="apps_remove_from_space">حذف از فضای امن</string>
+    <string name="dialog_close">بستن</string>
+    <string name="tile_subtitle">اتصال / قطع</string>
+    <string name="tile_connecting">TunnelLock: در حال اتصال…</string>
+    <string name="tile_disconnected">TunnelLock: قطع شد</string>
+    <string name="tile_open_space">فضای امن باز می‌شود؛ این بار اتصال را همان‌جا بزنید. از دفعهٔ بعد کاشی مستقیم کار می‌کند.</string>
+    <string name="tile_failed">کاشی TunnelLock کار نکرد: %1$s</string>
+    <string name="hub_add_tile">افزودن کاشی اتصال به تنظیمات سریع</string>
+    <string name="hub_tile_added">کاشی TunnelLock در تنظیمات سریع است.</string>
 </resources>
