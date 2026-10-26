@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">TunnelProbe</string>
+    <string name="channel_status">وضعیت تست</string>
+    <string name="channel_leak">هشدار نشت</string>
+    <string name="leak_title">نشت! ترافیک بیرون از VPN رفت</string>
+    <string name="status_starting">در حال شروع…</string>
+    <string name="status_line">%1$s · %2$s</string>
+    <string name="action_start">شروع تست</string>
+    <string name="action_stop">توقف</string>
+    <string name="action_copy">کپی گزارش</string>
+    <string name="action_clear">پاک کردن</string>
+    <string name="action_reset_baseline">فراموش کردن IP خروجی فعلی</string>
+    <string name="profile_work">این نسخه داخل فضای امن (پروفایل کاری) است ✓</string>
+    <string name="profile_personal">این نسخه در پروفایل شخصی است (بیرون از فضای امن، بدون محافظت)</string>
+    <string name="counters">متصل: %1$d · مسدود: %2$d · نشت: %3$d · IP جدید: %4$d</string>
+    <string name="interval">فاصلهٔ تست</string>
+    <string name="home_country">کشور شما</string>
+    <string name="real_ip">IP واقعی شما (اختیاری)</string>
+    <string name="log_title">گزارش (جدیدترین بالا)</string>
+    <string name="verdict_online">متصل از طریق VPN</string>
+    <string name="verdict_blocked">مسدود، هیچ ترافیکی خارج نمی‌شود</string>
+    <string name="verdict_leak">نشت!</string>
+    <string name="verdict_ip_changed">IP خروجی عوض شد</string>
+    <string name="verdict_idle">متوقف</string>
+    <string name="how_to">روش تست:\n۱. این اپ را با TunnelLock (بیرونی) به فضای امن اضافه کنید و نسخهٔ داخل فضای امن را باز کنید.\n۲. VPN را وصل کنید و «شروع تست» را بزنید. باید «متصل» با IP و کشور سرور را ببینید.\n۳. حالا قطع کنید: سرور را خاموش کنید، Wi-Fi و دیتا را عوض کنید، حالت هواپیما بزنید، یا TunnelLock را ببندید.\n۴. در تمام این مدت فقط باید «مسدود» ببینید. «نشت» یعنی ترافیک با IP ایران خارج شده است.\n۵. «کپی گزارش» را بزنید و برای عیب‌یابی بفرستید.\n\nهر دور چهار مسیر جدا را امتحان می‌کند: HTTPS بدون DNS، HTTPS با DNS، IPv4/IPv6 و UDP (STUN).</string>
+</resources>
