@@ -7,13 +7,13 @@
     <string name="phase_off">Off</string>
     <string name="phase_off_desc">The VPN service is not running. Android still keeps the secure-space apps offline.</string>
     <string name="phase_guarding">Locked</string>
-    <string name="phase_guarding_desc">Not connected. Protected apps are paused and have no internet.</string>
+    <string name="phase_guarding_desc">Not connected. Protected apps have no internet.</string>
     <string name="phase_connecting">Connecting…</string>
     <string name="phase_connecting_desc">Apps stay locked until the connection really works.</string>
     <string name="phase_connected">Connected</string>
     <string name="phase_connected_desc">Protected apps reach the internet only through this VPN.</string>
     <string name="phase_reconnecting">Connection lost</string>
-    <string name="phase_reconnecting_desc">Reconnecting. Protected apps have no internet until the connection is back.</string>
+    <string name="phase_reconnecting_desc">Reconnecting. Apps stay open but have no internet until the connection is back.</string>
 
     <string name="action_connect">Connect</string>
     <string name="action_disconnect">Disconnect</string>
@@ -41,7 +41,7 @@
     <string name="tab_apps">Apps</string>
     <string name="tab_settings">Settings</string>
 
-    <string name="setup_intro">TunnelLock creates a separate “secure space” on your phone. Apps you put in it can only use the internet through the VPN. If the VPN drops even for a moment, Android itself cuts their internet, and they won\'t open until it reconnects.</string>
+    <string name="setup_intro">TunnelLock creates a separate “secure space” on your phone. Apps you put in it can only use the internet through the VPN. If the VPN drops even for a moment, Android itself cuts their internet; the app is not closed and works again once the connection is back.</string>
     <string name="setup_steps_title">Steps</string>
     <string name="setup_step1">1. Tap “Create secure space” and confirm Android\'s screens.</string>
     <string name="setup_step2">2. TunnelLock opens inside the secure space (with a briefcase badge).</string>
@@ -66,6 +66,7 @@
     <string name="home_protected_count">%1$d apps</string>
     <string name="home_apps_paused">Paused, no internet</string>
     <string name="home_apps_running">Running, VPN only</string>
+    <string name="home_apps_blocked">Open, but without internet</string>
     <string name="home_killswitch">System kill switch</string>
     <string name="home_killswitch_on">Active: Android gives no internet without the VPN</string>
     <string name="home_killswitch_off">Inactive</string>
@@ -94,7 +95,7 @@
     <string name="dialog_add">Add</string>
     <string name="dialog_delete">Delete</string>
 
-    <string name="apps_hint">Every app in the secure space is protected: it only opens and reaches the internet while the VPN is connected.</string>
+    <string name="apps_hint">Every app in the secure space is protected: it reaches the internet only through the VPN, and loses it whenever the connection drops.</string>
     <string name="apps_install_permission">To add apps, allow TunnelLock to install unknown apps.</string>
     <string name="apps_open_settings">Open settings</string>
     <string name="apps_search">Search apps</string>
@@ -108,6 +109,8 @@
 
     <string name="settings_auto_connect">Auto-connect</string>
     <string name="settings_auto_connect_desc">Connects to the last server after the phone starts or the service restarts.</string>
+    <string name="settings_pause">Pause apps while disconnected</string>
+    <string name="settings_pause_desc">When you disconnect yourself, or are not connected yet, protected apps can\'t be opened. If the connection drops while you use an app, it is never closed; it only loses internet.</string>
     <string name="settings_language">Language</string>
     <string name="settings_reapply">Re-apply secure space rules</string>
     <string name="settings_reapply_desc">Sets the system kill switch and install access again.</string>
@@ -115,5 +118,5 @@
     <string name="settings_unknown_sources_desc">Needed to copy apps into the secure space.</string>
     <string name="settings_version">Version</string>
     <string name="settings_how_title">How does it work?</string>
-    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• While you are not connected, protected apps are paused and won\'t open.\n• Your normal apps (outside the secure space) are not affected.</string>
+    <string name="settings_how_body">• Apps in the secure space can only reach the internet through this app\'s VPN.\n• While the service runs, the tunnel is always up. If the server drops, packets are discarded inside the tunnel and nothing leaves through the normal network.\n• If the connection drops while you use an app, the app stays open and only loses internet; it works again once the connection is back.\n• If the app itself is closed or killed, Android\'s “Always-on VPN” + “Block connections without VPN” cuts the secure space off completely.\n• When you disconnect yourself (and “Pause apps” is on), protected apps can\'t be opened until you connect again.\n• Your normal apps (outside the secure space) are not affected.</string>
 </resources>

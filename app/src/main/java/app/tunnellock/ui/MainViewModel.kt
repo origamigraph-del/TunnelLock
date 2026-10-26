@@ -203,6 +203,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAutoConnect(enabled: Boolean) = store.setAutoConnect(enabled)
 
+    fun setPauseWhenDisconnected(enabled: Boolean) = store.setPauseWhenDisconnected(enabled)
+
     fun reapplyPolicies() {
         Policy.finalizeProfile(app)
         say(if (Policy.isLockdownActive(app)) R.string.msg_lockdown_ok else R.string.msg_lockdown_failed)
