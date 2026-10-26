@@ -13,7 +13,6 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileDescriptor
 import java.io.IOException
-import java.util.ArrayDeque
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
@@ -39,8 +38,12 @@ data class OpenVpnLogin(val username: String?, val password: String?, val keyPas
  * VpnService interface (doc/android.txt and doc/management-notes.txt in the
  * OpenVPN sources).
  *
- * Passwords are given over the socket when OpenVPN asks; they are never written
- * to disk or to the log.
+ * The login is given over the socket when OpenVPN asks for it: it is never put
+ * into OpenVPN's config file or the log. The config file (it may hold inline
+ * keys) is deleted as soon as OpenVPN has read it.
+ *
+ * Every start is a separate [Run]; events carry its id so a session can ignore
+ * anything from an earlier run.
  */
 class OpenVpnEngine(private val context: Context, private val host: Host) {
 
@@ -50,7 +53,7 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
 
         fun protect(fd: Int): Boolean
 
-        fun onEvent(event: Event)
+        fun onEvent(runId: Int, event: Event)
     }
 
     sealed interface Event {
@@ -69,124 +72,159 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
         val NEED_OK = Regex("""^>NEED-OK:Need '([^']+)' confirmation(?: MSG:(.*))?$""")
         val PASSWORD_NEED = Regex("""^>PASSWORD:Need '([^']+)' (username/password|password)""")
         val TIMESTAMP = Regex("""^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d """)
+        val TUN_REQUESTS = setOf("IFCONFIG", "IFCONFIG6", "ROUTE", "ROUTE6", "DNSSERVER", "DNS6SERVER", "DNSDOMAIN")
+    }
+
+    /** One OpenVPN process and everything that belongs to it. */
+    private class Run(val id: Int, val login: OpenVpnLogin, dir: File) {
+        val socketFile = File(dir, "mgmt")
+        val configFile = File(dir, "client.conf")
+        var process: Process? = null
+        var listener: LocalSocket? = null
+        var server: LocalServerSocket? = null
+        var managementThread: Thread? = null
+        @Volatile var socket: LocalSocket? = null
+
+        /** Stopped on purpose or exited: nothing from it reaches the session any more. */
+        @Volatile var ended = false
+        @Volatile var connected = false
+
+        /** The server refused the login since the last successful connection. */
+        @Volatile var loginRejected = false
+        @Volatile var problem: String? = null
+
+        // Management thread only.
+        var pending = OpenVpnTun()
+        var roundDone = false
+        var opened: OpenVpnTun? = null
+
+        private val writeLock = Any()
+
+        // No flush(): LocalSocket's flush waits until OpenVPN has read the bytes,
+        // and OpenVPN does not read while it is resolving a host name.
+        fun send(command: String) {
+            synchronized(writeLock) {
+                socket?.outputStream?.write((command + "\n").toByteArray())
+            }
+        }
+
+        fun sendWithFd(command: String, fd: FileDescriptor) {
+            synchronized(writeLock) {
+                val s = socket ?: return
+                s.setFileDescriptorsForSend(arrayOf(fd))
+                try {
+                    s.outputStream.write((command + "\n").toByteArray())
+                } finally {
+                    s.setFileDescriptorsForSend(null)
+                }
+            }
+        }
     }
 
     private val lock = Any()
+    private var current: Run? = null
+    private var nextId = 0
 
-    /** Every start gets a new number; callbacks from an older run are ignored. */
-    @Volatile private var generation = 0
-    private var process: Process? = null
-    private var listener: LocalSocket? = null
-    private var server: LocalServerSocket? = null
-    @Volatile private var socket: LocalSocket? = null
-    private var socketPath: String? = null
-    private var configFile: File? = null
+    /** Set when the service goes away: no new runs after that. */
+    @Volatile private var shutDown = false
 
-    val running: Boolean get() = synchronized(lock) { process != null }
+    val running: Boolean get() = synchronized(lock) { current != null }
 
-    /** Starts OpenVPN with an .ovpn config. Throws if it cannot be started at all. */
-    fun start(ovpn: String, login: OpenVpnLogin) {
+    /** Starts OpenVPN with an .ovpn config and returns the run's id. Throws if it cannot start at all. */
+    fun start(ovpn: String, login: OpenVpnLogin): Int {
         stop()
+        if (shutDown) throw IOException("TunnelLock is stopping")
         val exe = File(context.applicationInfo.nativeLibraryDir, "libovpnexec.so")
         if (!exe.exists()) throw IOException("OpenVPN is not part of this build")
         val dir = File(context.noBackupFilesDir, "openvpn").apply { mkdirs() }
-        val socketFile = File(dir, "mgmt").apply { delete() }
-        val config = File(dir, "client.conf")
-        config.writeText(OpenVpnConfig.runtimeConfig(ovpn, socketFile.absolutePath, "TunnelLock ${BuildConfig.VERSION_NAME}"))
-
-        synchronized(lock) {
-            val gen = ++generation
-            val local = LocalSocket()
-            local.bind(LocalSocketAddress(socketFile.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
-            val listening = LocalServerSocket(local.fileDescriptor)
-            val proc = try {
-                ProcessBuilder(exe.absolutePath, "--config", config.absolutePath)
-                    .directory(dir)
-                    .redirectErrorStream(true)
-                    .start()
-            } catch (e: Exception) {
-                runCatching { listening.close() }
-                runCatching { local.close() }
-                throw e
-            }
-            listener = local
-            server = listening
-            process = proc
-            socketPath = socketFile.absolutePath
-            configFile = config
-            AppLog.i(TAG, "started")
-            thread(name = "openvpn-output", isDaemon = true) { readOutput(proc) }
-            thread(name = "openvpn-management", isDaemon = true) { manage(listening, login, gen) }
-            thread(name = "openvpn-exit", isDaemon = true) { watchExit(proc, gen) }
+        val run = synchronized(lock) { Run(++nextId, login, dir) }
+        run.socketFile.delete()
+        try {
+            run.configFile.writeText(
+                OpenVpnConfig.runtimeConfig(ovpn, run.socketFile.absolutePath, "TunnelLock ${BuildConfig.VERSION_NAME}"),
+            )
+            val listener = LocalSocket()
+            run.listener = listener
+            listener.bind(LocalSocketAddress(run.socketFile.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM))
+            run.server = LocalServerSocket(listener.fileDescriptor)
+            run.process = ProcessBuilder(exe.absolutePath, "--config", run.configFile.absolutePath)
+                .directory(dir)
+                .redirectErrorStream(true)
+                .start()
+        } catch (e: Exception) {
+            run.ended = true
+            cleanUp(run)
+            throw e
         }
+        val process = requireNotNull(run.process)
+        synchronized(lock) { current = run }
+        AppLog.i(TAG, "started (run ${run.id})")
+        thread(name = "openvpn-output", isDaemon = true) { readOutput(process) }
+        run.managementThread = thread(name = "openvpn-management", isDaemon = true) { manage(run) }
+        thread(name = "openvpn-exit", isDaemon = true) { watchExit(run, process) }
+        if (shutDown) {
+            stop()
+            throw IOException("TunnelLock is stopping")
+        }
+        return run.id
     }
 
-    /** Stops OpenVPN (politely, then by force). Safe to call when not running. */
+    /** Stops OpenVPN (SIGTERM, then by force). Safe to call when not running. */
     fun stop() {
-        val proc: Process
-        synchronized(lock) {
-            proc = process ?: return
-            generation++
-            process = null
+        val run = take() ?: return
+        run.process?.let { process ->
+            process.destroy()
+            if (!process.waitFor(3, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                process.waitFor(1, TimeUnit.SECONDS)
+            }
         }
-        runCatching { send("signal SIGTERM") }
-        if (!proc.waitFor(3, TimeUnit.SECONDS)) {
-            proc.destroy()
-            if (!proc.waitFor(1, TimeUnit.SECONDS)) proc.destroyForcibly()
-        }
-        cleanUp()
-        AppLog.i(TAG, "stopped")
+        cleanUp(run)
+        AppLog.i(TAG, "stopped (run ${run.id})")
     }
 
-    /** Ends OpenVPN without waiting (for the service's onDestroy, on the main thread). */
+    /** Ends OpenVPN without waiting, for good (the service's onDestroy, on the main thread). */
     fun kill() {
-        val proc: Process
-        synchronized(lock) {
-            proc = process ?: return
-            generation++
-            process = null
-        }
-        proc.destroy()
-        cleanUp()
+        shutDown = true
+        val run = take() ?: return
+        run.process?.destroy()
+        cleanUp(run)
     }
 
     /** The phone switched networks: OpenVPN moves its connection or reconnects. */
     fun networkChanged() {
-        runCatching { send("network-change") }
+        val run = synchronized(lock) { current } ?: return
+        runCatching { run.send("network-change") }
+    }
+
+    private fun take(): Run? {
+        val run = synchronized(lock) { current.also { current = null } } ?: return null
+        run.ended = true
+        return run
+    }
+
+    private fun emit(run: Run, event: Event) {
+        val live = synchronized(lock) { current === run }
+        if (live && !run.ended) host.onEvent(run.id, event)
     }
 
     // ---- management -------------------------------------------------------------
 
-    private class Session(val login: OpenVpnLogin, val gen: Int) {
-        val fds = ArrayDeque<FileDescriptor>()
-        var pending = OpenVpnTun()
-
-        /** Set after PERSIST_TUN_ACTION: the next ifconfig/route/dns request starts a new round. */
-        var roundDone = false
-        var opened: OpenVpnTun? = null
-        var connected = false
-        var loginRejected = false
-        var lastProblem: String? = null
-    }
-
-    @Volatile private var session: Session? = null
-
-    private fun manage(listening: LocalServerSocket, login: OpenVpnLogin, gen: Int) {
+    private fun manage(run: Run) {
         val client = try {
-            listening.accept()
+            run.server?.accept() ?: return
         } catch (e: IOException) {
             return
         }
-        if (gen != generation) {
+        if (run.ended) {
             runCatching { client.close() }
             return
         }
-        val s = Session(login, gen)
-        socket = client
-        session = s
-        // The socket file is not needed once OpenVPN is connected.
-        socketPath?.let { File(it).delete() }
-        runCatching { send("state on") }
+        run.socket = client
+        // OpenVPN has read its config (with any inline keys) before connecting here.
+        run.configFile.delete()
+        run.socketFile.delete()
+        runCatching { run.send("state on") }
 
         val input = client.inputStream
         val buffer = ByteArray(4096)
@@ -195,12 +233,13 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
             while (true) {
                 val n = input.read(buffer)
                 if (n < 0) break
-                // Descriptors (for PROTECTFD) arrive with the bytes of the request.
-                client.ancillaryFileDescriptors?.forEach { s.fds.add(it) }
+                // Sockets to protect (PROTECTFD, and the reply to network-change) arrive
+                // as descriptors with the bytes: protect and close each one right away.
+                client.ancillaryFileDescriptors?.forEach { protectAndClose(it) }
                 for (i in 0 until n) {
                     val b = buffer[i]
                     if (b == '\n'.code.toByte()) {
-                        handle(s, line.toString(Charsets.UTF_8.name()).trimEnd('\r'))
+                        handle(run, line.toString(Charsets.UTF_8.name()).trimEnd('\r'))
                         line.reset()
                     } else {
                         line.write(b.toInt())
@@ -208,214 +247,192 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
                 }
             }
         } catch (e: IOException) {
-            // OpenVPN exited or we closed the socket.
-        } finally {
-            while (s.fds.isNotEmpty()) runCatching { Os.close(s.fds.poll()) }
+            // OpenVPN exited or the socket was closed.
         }
     }
 
-    private fun handle(s: Session, line: String) {
-        if (s.gen != generation) return
+    private fun protectAndClose(fd: FileDescriptor?) {
+        if (fd == null) return
+        runCatching { ParcelFileDescriptor.dup(fd).use { host.protect(it.fd) } }
+        runCatching { Os.close(fd) }
+    }
+
+    private fun handle(run: Run, line: String) {
+        if (run.ended) return
         when {
-            line.startsWith(">HOLD:") -> send("hold release")
-            line.startsWith(">STATE:") -> onState(s, line.removePrefix(">STATE:"))
-            line.startsWith(">NEED-OK:") -> NEED_OK.find(line)?.let { onNeedOk(s, it.groupValues[1], it.groupValues[2]) }
-            line.startsWith(">PASSWORD:") -> onPassword(s, line)
+            line.startsWith(">HOLD:") -> run.send("hold release")
+            line.startsWith(">STATE:") -> onState(run, line.removePrefix(">STATE:"))
+            line.startsWith(">NEED-OK:") -> NEED_OK.find(line)?.let { onNeedOk(run, it.groupValues[1], it.groupValues[2]) }
+            line.startsWith(">PASSWORD:") -> onPassword(run, line)
             line.startsWith(">FATAL:") -> {
-                s.lastProblem = line.removePrefix(">FATAL:")
-                AppLog.w(TAG, "fatal: ${s.lastProblem}")
+                run.problem = line.removePrefix(">FATAL:")
+                AppLog.w(TAG, "fatal: ${run.problem}")
             }
             line.startsWith("ERROR:") -> AppLog.w(TAG, "management: $line")
         }
     }
 
-    private fun onState(s: Session, value: String) {
+    private fun onState(run: Run, value: String) {
         // time,STATE,detail,local ip,remote ip,...
         val fields = value.split(',')
         val state = fields.getOrNull(1).orEmpty()
         val detail = fields.getOrNull(2).orEmpty()
         AppLog.i(TAG, "state $state" + if (detail.isNotEmpty()) " ($detail)" else "")
         when (state) {
-            "CONNECTED" -> if (!s.connected) {
-                s.connected = true
-                host.onEvent(Event.Connected)
-            }
-            "RECONNECTING" -> {
-                if (detail.contains("auth-failure")) s.loginRejected = true
-                if (s.connected) {
-                    s.connected = false
-                    host.onEvent(Event.Reconnecting(detail))
+            "CONNECTED" -> {
+                run.loginRejected = false
+                if (!run.connected) {
+                    run.connected = true
+                    emit(run, Event.Connected)
                 }
             }
-            "EXITING" -> if (detail.isNotEmpty()) s.lastProblem = detail
+            "RECONNECTING" -> if (run.connected) {
+                run.connected = false
+                emit(run, Event.Reconnecting(detail))
+            }
+            "EXITING" -> if (detail.isNotEmpty()) run.problem = detail
         }
     }
 
-    private fun onPassword(s: Session, line: String) {
+    private fun onPassword(run: Run, line: String) {
         if (line.startsWith(">PASSWORD:Verification Failed")) {
-            s.loginRejected = true
+            // Also sent for temporary failures and expired tokens, after which OpenVPN
+            // reconnects by itself; a later CONNECTED clears it.
+            run.loginRejected = true
             AppLog.w(TAG, "the server rejected the login")
             return
         }
         // Other PASSWORD lines (auth tokens) carry secrets: never log them.
         val need = PASSWORD_NEED.find(line) ?: return
         val type = need.groupValues[1]
-        val withUser = need.groupValues[2] == "username/password"
-        val login = s.login
-        if (type == "Private Key") {
-            val key = login.keyPassword
-            if (key.isNullOrEmpty()) {
-                s.lastProblem = "the private key needs a password"
-                send("signal SIGTERM")
-            } else {
-                send("password 'Private Key' ${quote(key)}")
+        val login = run.login
+        when (type) {
+            "Auth" -> {
+                val withUser = need.groupValues[2] == "username/password"
+                if (login.password.isNullOrEmpty() || withUser && login.username.isNullOrEmpty()) {
+                    run.loginRejected = true
+                    run.problem = "the server needs a username and password"
+                    run.send("signal SIGTERM")
+                } else {
+                    if (withUser) run.send("username 'Auth' ${quote(login.username.orEmpty())}")
+                    run.send("password 'Auth' ${quote(login.password.orEmpty())}")
+                }
             }
-            return
+            "Private Key" -> {
+                val key = login.keyPassword
+                if (key.isNullOrEmpty()) {
+                    run.problem = "the private key needs a password"
+                    run.send("signal SIGTERM")
+                } else {
+                    run.send("password 'Private Key' ${quote(key)}")
+                }
+            }
+            // The VPN login must never go to anything else (an HTTP proxy, for example).
+            else -> {
+                run.problem = "the config asks for a '$type' login, which TunnelLock does not support"
+                run.send("signal SIGTERM")
+            }
         }
-        if (login.password.isNullOrEmpty() || withUser && login.username.isNullOrEmpty()) {
-            s.loginRejected = true
-            s.lastProblem = "the server needs a username and password"
-            send("signal SIGTERM")
-            return
-        }
-        if (withUser) send("username '$type' ${quote(login.username.orEmpty())}")
-        send("password '$type' ${quote(login.password.orEmpty())}")
     }
 
-    private fun onNeedOk(s: Session, type: String, message: String) {
-        if (s.roundDone && type in setOf("IFCONFIG", "IFCONFIG6", "ROUTE", "ROUTE6", "DNSSERVER", "DNS6SERVER", "DNSDOMAIN")) {
-            s.pending = OpenVpnTun()
-            s.roundDone = false
+    private fun onNeedOk(run: Run, type: String, message: String) {
+        if (run.roundDone && type in TUN_REQUESTS) {
+            run.pending = OpenVpnTun()
+            run.roundDone = false
         }
         when (type) {
-            "PROTECTFD" -> {
-                val fd = s.fds.poll()
-                if (fd == null) {
-                    AppLog.w(TAG, "PROTECTFD without a descriptor")
-                } else {
-                    runCatching { ParcelFileDescriptor.dup(fd).use { host.protect(it.fd) } }
-                    runCatching { Os.close(fd) }
-                }
-                reply(type, "ok")
-            }
+            // The descriptor was protected when it arrived.
+            "PROTECTFD" -> reply(run, type, "ok")
             "IFCONFIG" -> {
                 // "local netmask-or-peer mtu topology"
                 val parts = message.trim().split(' ')
                 val prefix = if (parts.getOrNull(3) == "subnet") prefixOf(parts.getOrNull(1)) else 32
-                s.pending = s.pending.copy(
+                run.pending = run.pending.copy(
                     ipv4 = parts.getOrNull(0),
                     ipv4Prefix = prefix,
-                    mtu = parts.getOrNull(2)?.toIntOrNull() ?: s.pending.mtu,
+                    mtu = parts.getOrNull(2)?.toIntOrNull() ?: run.pending.mtu,
                 )
-                reply(type, "ok")
+                reply(run, type, "ok")
             }
             "IFCONFIG6" -> {
                 // "address/bits mtu"
                 val address = message.trim().substringBefore(' ')
-                s.pending = s.pending.copy(
+                run.pending = run.pending.copy(
                     ipv6 = address.substringBefore('/'),
                     ipv6Prefix = address.substringAfter('/', "128").toIntOrNull() ?: 128,
                 )
-                reply(type, "ok")
+                reply(run, type, "ok")
             }
             "DNSSERVER", "DNS6SERVER" -> {
                 val server = message.trim()
-                if (server.isNotEmpty() && server !in s.pending.dns) s.pending = s.pending.copy(dns = s.pending.dns + server)
-                reply(type, "ok")
+                if (server.isNotEmpty() && server !in run.pending.dns) run.pending = run.pending.copy(dns = run.pending.dns + server)
+                reply(run, type, "ok")
             }
             "DNSDOMAIN" -> {
-                s.pending = s.pending.copy(domain = message.trim().ifEmpty { null })
-                reply(type, "ok")
+                run.pending = run.pending.copy(domain = message.trim().ifEmpty { null })
+                reply(run, type, "ok")
             }
             "PERSIST_TUN_ACTION" -> {
-                reply(type, if (s.opened != null && s.opened == s.pending) "NOACTION" else "OPEN_BEFORE_CLOSE")
-                s.roundDone = true
+                reply(run, type, if (run.opened != null && run.opened == run.pending) "NOACTION" else "OPEN_BEFORE_CLOSE")
+                run.roundDone = true
             }
             "OPENTUN" -> {
-                val tun = s.pending
+                val tun = run.pending
                 val pfd = runCatching { host.openTun(tun) }
                     .onFailure { AppLog.w(TAG, "opening the tunnel interface failed", it) }
                     .getOrNull()
                 if (pfd == null) {
-                    reply(type, "cancel")
+                    reply(run, type, "cancel")
                 } else {
-                    sendWithFd("needok 'OPENTUN' ok", pfd.fileDescriptor)
-                    s.opened = tun
+                    run.sendWithFd("needok 'OPENTUN' ok", pfd.fileDescriptor)
+                    run.opened = tun
                     AppLog.i(TAG, "tunnel interface ready (mtu ${tun.mtu}, ${tun.dns.size} dns)")
                 }
-                s.roundDone = true
+                run.roundDone = true
             }
             // Routes are not needed: TunnelLock sends everything into the tunnel.
-            else -> reply(type, "ok")
+            else -> reply(run, type, "ok")
         }
     }
 
-    private fun reply(type: String, answer: String) = send("needok '$type' $answer")
-
-    private fun send(command: String) {
-        synchronized(lock) {
-            val out = socket?.outputStream ?: return
-            out.write((command + "\n").toByteArray())
-            out.flush()
-        }
-    }
-
-    private fun sendWithFd(command: String, fd: FileDescriptor) {
-        synchronized(lock) {
-            val s = socket ?: return
-            s.setFileDescriptorsForSend(arrayOf(fd))
-            try {
-                s.outputStream.write((command + "\n").toByteArray())
-                s.outputStream.flush()
-            } finally {
-                s.setFileDescriptorsForSend(null)
-            }
-        }
-    }
+    private fun reply(run: Run, type: String, answer: String) = run.send("needok '$type' $answer")
 
     // ---- process ----------------------------------------------------------------
 
-    private fun readOutput(proc: Process) {
+    private fun readOutput(process: Process) {
         runCatching {
-            proc.inputStream.bufferedReader().forEachLine { AppLog.i(TAG, it.replace(TIMESTAMP, "")) }
+            process.inputStream.bufferedReader().forEachLine { AppLog.i(TAG, it.replace(TIMESTAMP, "")) }
         }
     }
 
-    private fun watchExit(proc: Process, gen: Int) {
-        val code = runCatching { proc.waitFor() }.getOrDefault(-1)
-        val s = session?.takeIf { it.gen == gen }
-        synchronized(lock) {
-            // Stopped on purpose: stop() cleans up and nobody needs to hear about it.
-            if (gen != generation) return
-            process = null
-            generation++
-        }
-        cleanUp()
-        val reason = s?.lastProblem ?: "OpenVPN exited (code $code)"
+    private fun watchExit(run: Run, process: Process) {
+        val code = runCatching { process.waitFor() }.getOrDefault(-1)
+        // Let the management thread read OpenVPN's last lines (why it ended).
+        run.managementThread?.join(2_000)
+        val wasCurrent = synchronized(lock) { (current === run).also { if (it) current = null } }
+        // Stopped on purpose: stop() cleans up and nobody needs to hear about it.
+        if (!wasCurrent) return
+        run.ended = true
+        cleanUp(run)
+        val reason = run.problem ?: "OpenVPN exited (code $code)"
         AppLog.w(TAG, "ended: $reason")
-        host.onEvent(Event.Stopped(reason, loginRejected = s?.loginRejected == true))
+        host.onEvent(run.id, Event.Stopped(reason, loginRejected = run.loginRejected))
     }
 
-    private fun cleanUp() {
-        val path: String?
-        synchronized(lock) {
-            runCatching { socket?.close() }
-            socket = null
-            path = socketPath
-            // accept() does not return when its socket is closed: wake it with a connection first.
-            // (Once OpenVPN has connected, the socket file is gone and this does nothing.)
-            if (path != null && server != null) {
-                runCatching { LocalSocket().use { it.connect(LocalSocketAddress(path, LocalSocketAddress.Namespace.FILESYSTEM)) } }
+    private fun cleanUp(run: Run) {
+        runCatching { run.socket?.close() }
+        run.socket = null
+        // accept() does not return when its socket is closed: wake it with a
+        // connection first. (Once OpenVPN has connected, the file is gone.)
+        if (run.server != null && run.socketFile.exists()) {
+            runCatching {
+                LocalSocket().use { it.connect(LocalSocketAddress(run.socketFile.absolutePath, LocalSocketAddress.Namespace.FILESYSTEM)) }
             }
-            runCatching { server?.close() }
-            runCatching { listener?.close() }
-            server = null
-            listener = null
-            socketPath = null
-            configFile?.delete()
-            configFile = null
         }
-        path?.let { File(it).delete() }
+        runCatching { run.server?.close() }
+        runCatching { run.listener?.close() }
+        run.socketFile.delete()
+        run.configFile.delete()
     }
 
     private fun prefixOf(netmask: String?): Int =

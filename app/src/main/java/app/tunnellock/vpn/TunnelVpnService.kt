@@ -18,6 +18,7 @@ import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
+import app.tunnellock.core.openvpn.OpenVpnConfig
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
@@ -84,8 +85,8 @@ class TunnelVpnService : VpnService() {
         private const val FAILOVER_PARALLEL = 4
         private const val SUBSCRIPTION_CHECK_MS = 60 * 60 * 1000L
 
-        /** A connect tap gives up if OpenVPN has not connected by then (it keeps retrying on its own). */
-        private const val OPENVPN_CONNECT_TIMEOUT_MS = 60_000L
+        /** A connect tap gives up after at most this long (OpenVPN keeps retrying on its own otherwise). */
+        private const val OPENVPN_MAX_CONNECT_TIMEOUT_MS = 180_000L
 
         fun send(context: Context, action: String) {
             ContextCompat.startForegroundService(
@@ -127,23 +128,24 @@ class TunnelVpnService : VpnService() {
 
     /** What the current interface was built for, when OpenVPN asked for it; null for TunnelLock's own. */
     private var openVpnTun: OpenVpnTun? = null
-    @Volatile private var openVpnEvents: Channel<OpenVpnEngine.Event>? = null
+    @Volatile private var openVpnEvents: Channel<Pair<Int, OpenVpnEngine.Event>>? = null
     private val openVpnHost = object : OpenVpnEngine.Host {
         override fun openTun(tun: OpenVpnTun): ParcelFileDescriptor? = establishOpenVpnTun(tun)
 
         override fun protect(fd: Int): Boolean = this@TunnelVpnService.protect(fd)
 
-        override fun onEvent(event: OpenVpnEngine.Event) {
-            openVpnEvents?.trySend(event)
+        override fun onEvent(runId: Int, event: OpenVpnEngine.Event) {
+            openVpnEvents?.trySend(runId to event)
         }
     }
     private val openVpn by lazy { OpenVpnEngine(this, openVpnHost) }
 
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            // A newly copied app is not in use yet; keep it closed while we are not connected.
+            // An update of an app that is in use is left alone.
+            if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
             val pkg = intent.data?.schemeSpecificPart ?: return
-            if (store.pauseWhenDisconnected.value) AppGate.closeIfDisconnected(context, listOf(pkg))
+            AppGate.closeNewApp(context, pkg)
         }
     }
 
@@ -248,10 +250,13 @@ class TunnelVpnService : VpnService() {
 
     private suspend fun startSession(mode: SessionMode) {
         stopSession()
+        // A connect tap that fails pauses the apps again only if they were paused before it
+        // (not when switching servers while the apps are in use).
+        val pauseOnFailure = mode == SessionMode.USER && store.pauseWhenDisconnected.value && TunnelState.status.value.appsPaused
         val server = store.selectedServer()
         val profile = server?.let { store.profileOf(it) }
         if (server == null || profile == null) {
-            enterGuard(getString(R.string.error_no_server), pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value)
+            enterGuard(getString(R.string.error_no_server), pauseOnFailure)
             return
         }
         if (profile.protocol == Protocol.OPENVPN) {
@@ -259,7 +264,7 @@ class TunnelVpnService : VpnService() {
                 setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
                 return
             }
-            session = scope.launch { runOpenVpnSession(server, profile, mode) }
+            session = scope.launch { runOpenVpnSession(server, profile, mode, pauseOnFailure) }
             return
         }
         // Xray reads from TunnelLock's own interface, not one built for an OpenVPN server.
@@ -269,7 +274,7 @@ class TunnelVpnService : VpnService() {
             return
         }
         val config = XrayConfigBuilder.build(profile, CoreOptions(mtu = MTU))
-        session = scope.launch { runSession(server, config, fd, mode) }
+        session = scope.launch { runSession(server, config, fd, mode, pauseOnFailure) }
     }
 
     private suspend fun stopSession() {
@@ -284,7 +289,7 @@ class TunnelVpnService : VpnService() {
      * Keeps a server connection alive. "Connected" (and letting the apps run)
      * only happens after a real request went through the proxy.
      */
-    private suspend fun runSession(first: StoredServer, firstConfig: String, fd: Int, mode: SessionMode) {
+    private suspend fun runSession(first: StoredServer, firstConfig: String, fd: Int, mode: SessionMode, pauseOnFailure: Boolean) {
         var server = first
         var config = firstConfig
         if (mode == SessionMode.NETWORK) {
@@ -296,10 +301,12 @@ class TunnelVpnService : VpnService() {
         val tried = mutableSetOf(server.link)
         var failures = 0
         var backoff = 1_000L
+        var everConnected = false
         while (true) {
             val started = runCatching { XrayCore.start(this, config, fd) }
             started.exceptionOrNull()?.let { AppLog.w(TAG, "core start failed", it) }
             if (started.isSuccess && checkConnectivity()) {
+                everConnected = true
                 markConnected(server)
                 tried.clear()
                 tried += server.link
@@ -337,13 +344,13 @@ class TunnelVpnService : VpnService() {
                     XrayCore.stop()
                     enterGuard(
                         getString(R.string.error_core_start, started.exceptionOrNull()?.message.orEmpty()),
-                        pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value,
+                        pause = pauseOnFailure && !everConnected,
                     )
                     return
                 }
                 if (mode == SessionMode.USER && TunnelState.status.value.phase == Phase.CONNECTING && failures >= INITIAL_ATTEMPTS) {
                     XrayCore.stop()
-                    enterGuard(getString(R.string.error_server_unreachable), pause = store.pauseWhenDisconnected.value)
+                    enterGuard(getString(R.string.error_server_unreachable), pause = pauseOnFailure)
                     return
                 }
             }
@@ -410,41 +417,49 @@ class TunnelVpnService : VpnService() {
     /**
      * Runs an OpenVPN server. OpenVPN reconnects by itself; this follows its
      * state, gives up on a connect tap that never succeeds, and starts OpenVPN
-     * again if it ends while in use.
+     * again if it ends while in use. Once the apps have been running, giving up
+     * never pauses them: they stay open without internet.
      */
-    private suspend fun runOpenVpnSession(server: StoredServer, profile: ServerProfile, mode: SessionMode) {
+    private suspend fun runOpenVpnSession(server: StoredServer, profile: ServerProfile, mode: SessionMode, pauseOnFailure: Boolean) {
         if (mode == SessionMode.NETWORK) {
             markDropped(server.name)
         } else {
             setStatus { it.copy(phase = Phase.CONNECTING, serverName = server.name, connectedSince = null, error = null) }
         }
-        val pause = mode == SessionMode.USER && store.pauseWhenDisconnected.value
+        val config = requireNotNull(profile.rawConfig)
         val login = OpenVpnLogin(server.username, server.password, server.keyPassword)
-        val events = Channel<OpenVpnEngine.Event>(Channel.UNLIMITED)
+        val events = Channel<Pair<Int, OpenVpnEngine.Event>>(Channel.UNLIMITED)
         openVpnEvents = events
+        // OpenVPN gives each remote about 20 s (server-poll-timeout) before trying the next.
+        val remotes = runCatching { OpenVpnConfig.remotes(config).size }.getOrDefault(1).coerceAtLeast(1)
+        val connectTimeout = (30_000L + 30_000L * remotes).coerceAtMost(OPENVPN_MAX_CONNECT_TIMEOUT_MS)
         var everConnected = false
         var backoff = 2_000L
+        fun pauseNow() = pauseOnFailure && !everConnected
         while (true) {
-            try {
-                openVpn.start(requireNotNull(profile.rawConfig), login)
+            val runId = try {
+                openVpn.start(config, login)
             } catch (e: Exception) {
                 AppLog.w(TAG, "OpenVPN did not start", e)
-                enterGuard(getString(R.string.error_openvpn_start, e.message.orEmpty()), pause)
+                enterGuard(getString(R.string.error_openvpn_start, e.message.orEmpty()), pauseNow())
                 return
             }
-            run@ while (true) {
-                val event = if (mode == SessionMode.USER && !everConnected) {
-                    withTimeoutOrNull(OPENVPN_CONNECT_TIMEOUT_MS) { events.receive() }
+            wait@ while (true) {
+                val received = if (mode == SessionMode.USER && !everConnected) {
+                    withTimeoutOrNull(connectTimeout) { events.receive() }
                 } else {
                     events.receive()
                 }
+                if (received == null) {
+                    AppLog.w(TAG, "OpenVPN did not connect in time")
+                    openVpn.stop()
+                    enterGuard(getString(R.string.error_server_unreachable), pauseNow())
+                    return
+                }
+                val (id, event) = received
+                // Left over from an earlier run.
+                if (id != runId) continue
                 when (event) {
-                    null -> {
-                        AppLog.w(TAG, "OpenVPN did not connect in time")
-                        openVpn.stop()
-                        enterGuard(getString(R.string.error_server_unreachable), pause)
-                        return
-                    }
                     OpenVpnEngine.Event.Connected -> {
                         everConnected = true
                         backoff = 2_000L
@@ -454,18 +469,18 @@ class TunnelVpnService : VpnService() {
                     is OpenVpnEngine.Event.Reconnecting -> markDropped(server.name)
                     is OpenVpnEngine.Event.Stopped -> {
                         if (event.loginRejected) {
-                            enterGuard(getString(R.string.error_openvpn_login), pause)
+                            enterGuard(getString(R.string.error_openvpn_login), pauseNow())
                             return
                         }
                         if (mode == SessionMode.USER && !everConnected) {
-                            enterGuard(getString(R.string.error_openvpn_stopped, event.reason), pause)
+                            enterGuard(getString(R.string.error_openvpn_stopped, event.reason), pauseNow())
                             return
                         }
                         // Ended by itself while in use: the interface keeps blocking; start it again.
                         markDropped(server.name)
                         delay(backoff)
                         backoff = (backoff * 2).coerceAtMost(MAX_BACKOFF_MS)
-                        break@run
+                        break@wait
                     }
                 }
             }
