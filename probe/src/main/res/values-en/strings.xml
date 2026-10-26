@@ -26,4 +26,6 @@
     <string name="action_send">Send log to developer</string>
     <string name="auto_send">Send automatically after each test</string>
     <string name="verdict_direct">Direct, no VPN (normal in the personal profile)</string>
+    <string name="battery_off">For long tests: remove the battery limit</string>
+    <string name="battery_on">Battery limit removed ✓</string>
 </resources>
