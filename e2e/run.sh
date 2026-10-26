@@ -115,12 +115,14 @@ verdicts() { # <from> <skip>
     probelog | tail -n +"$(($1 + 1))" | awk '$2 != "==" && $2 != "--" {print $2}' | tail -n +"$(($2 + 1))"
 }
 
+# A blocked round takes up to ~20 s (DNS gives up slowly), so a window sees only
+# a few: the round in flight at the event is skipped, and none of the rest may get out.
 check_blocked() { # <name> <from>
     local v total bad
-    v=$(verdicts "$2" 2)
+    v=$(verdicts "$2" 1)
     total=$(echo "$v" | grep -c . || true)
     bad=$(echo "$v" | grep -vc '^BLOCKED$' || true)
-    if [ "$total" -ge 4 ] && [ "$bad" -eq 0 ]; then
+    if [ "$total" -ge 1 ] && [ "$bad" -eq 0 ]; then
         pass "$1" "all $total probe rounds were BLOCKED"
     else
         fail "$1" "$bad of $total probe rounds got out (expected all BLOCKED): $(echo "$v" | sort | uniq -c | tr '\n' ' ')"
@@ -132,10 +134,10 @@ check_blocked() { # <name> <from>
 check_blocked_until_connected() { # <name> <probe from> <app from>
     local until v total bad
     until=$(applog | tail -n +"$(($3 + 1))" | grep -m1 -- "-> CONNECTED" | awk '{print $2}')
-    v=$(probelog | tail -n +"$(($2 + 1))" | awk -v until="$until" '$2 != "==" && $2 != "--" && (until == "" || $1 < until) {print $2}' | tail -n +3)
+    v=$(probelog | tail -n +"$(($2 + 1))" | awk -v until="$until" '$2 != "==" && $2 != "--" && (until == "" || $1 < until) {print $2}' | tail -n +2)
     total=$(echo "$v" | grep -c . || true)
     bad=$(echo "$v" | grep -vc '^BLOCKED$' || true)
-    if [ "$total" -ge 2 ] && [ "$bad" -eq 0 ]; then
+    if [ "$total" -ge 1 ] && [ "$bad" -eq 0 ]; then
         pass "$1" "all $total probe rounds were BLOCKED${until:+ until TunnelLock came back at $until}"
     else
         fail "$1" "$bad of $total probe rounds got out (expected all BLOCKED): $(echo "$v" | sort | uniq -c | tr '\n' ' ')"
@@ -216,7 +218,7 @@ fi
 
 m=$(mark); from=$(applines)
 sh_ am start-foreground-service --user "$U" -n $APP/.vpn.TunnelVpnService -a app.tunnellock.action.DISCONNECT >/dev/null
-sleep 30
+sleep 50
 check_blocked "Disconnected" "$m"
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> GUARDING"; then pass "Disconnect" "TunnelLock is GUARDING"; else fail "Disconnect" "no GUARDING"; fi
 
@@ -232,7 +234,7 @@ if sudo grep -q "e2e" "$OUT/openvpn-status.log" 2>/dev/null; then pass "OpenVPN 
 
 m=$(mark)
 "$ROOT/e2e/servers.sh" stop openvpn
-sleep 50
+sleep 60
 check_blocked "OpenVPN server down" "$m"
 from=$(applines)
 "$ROOT/e2e/servers.sh" start openvpn
