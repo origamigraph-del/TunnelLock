@@ -13,3 +13,8 @@ app/libs/*.aar
 # Never commit signing passwords
 signing/*.properties
 SIGNING_PASSWORD*
+
+# Built by CI from pinned sources (see native/build-openvpn.sh)
+native/work/
+native/out/
+app/src/main/jniLibs/

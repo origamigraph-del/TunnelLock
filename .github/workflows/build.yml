@@ -13,6 +13,8 @@ env:
   # Xray core for Android, built by the AndroidLibXrayLite project (same core v2rayNG uses).
   XRAY_LIB_VERSION: v26.10.21
   XRAY_LIB_SHA256: e56ec3b06485fe7b37af26948673951edf719c50d6bbc618b8539045952adde4
+  # NDK used to build the OpenVPN binary.
+  NDK_VERSION: 27.2.12479018
   # Password of signing/release.jks (repository secret).
   SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
   # Token the apps use to post their logs to issue #1 (repository secret, optional).
@@ -40,6 +42,28 @@ jobs:
           curl -fsSL -o app/libs/libv2ray.aar \
             "https://github.com/2dust/AndroidLibXrayLite/releases/download/${XRAY_LIB_VERSION}/libv2ray.aar"
           echo "${XRAY_LIB_SHA256}  app/libs/libv2ray.aar" | sha256sum -c -
+
+      # OpenVPN, OpenSSL, LZO and LZ4 built from pinned sources (native/build-openvpn.sh).
+      # Takes a while, so the result is cached until the script changes.
+      - name: Restore OpenVPN binaries
+        id: openvpn-cache
+        uses: actions/cache@v4
+        with:
+          path: native/out
+          key: openvpn-${{ hashFiles('native/build-openvpn.sh') }}-ndk-${{ env.NDK_VERSION }}
+
+      - name: Build OpenVPN
+        if: steps.openvpn-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y -qq autoconf automake libtool pkg-config >/dev/null
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;${NDK_VERSION}" >/dev/null
+          native/build-openvpn.sh "$ANDROID_HOME/ndk/${NDK_VERSION}" native/out
+
+      - name: Add OpenVPN to the app
+        run: |
+          mkdir -p app/src/main/jniLibs
+          cp -r native/out/. app/src/main/jniLibs/
+          ls -l app/src/main/jniLibs/*/libovpnexec.so
 
       - name: Check signing secret
         if: env.SIGNING_PASSWORD == ''
