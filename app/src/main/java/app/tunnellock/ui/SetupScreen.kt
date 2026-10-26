@@ -34,11 +34,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -194,6 +194,7 @@ private fun PersonalHub(space: UserHandle) {
     }
     val sendFailed = stringResource(R.string.hub_send_failed)
     val tileAdded = stringResource(R.string.hub_tile_added)
+    var tileOn by remember { mutableStateOf(ToggleTileService.isEnabled(context)) }
     var showLogs by remember { mutableStateOf(false) }
     if (showLogs) LogsDialog(onDismiss = { showLogs = false })
 
@@ -246,18 +247,25 @@ private fun PersonalHub(space: UserHandle) {
                             },
                             modifier = Modifier.fillMaxWidth(),
                         ) { Text(stringResource(R.string.setup_open)) }
-                        if (Build.VERSION.SDK_INT >= 33) {
-                            OutlinedButton(
-                                onClick = {
-                                    ToggleTileService.requestAdd(context) { added ->
-                                        if (added) scope.launch { snackbar.showSnackbar(tileAdded) }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) { Text(stringResource(R.string.hub_add_tile)) }
+                    }
+                }
+            }
+            item {
+                val setTile = { on: Boolean ->
+                    ToggleTileService.setEnabled(context, on)
+                    tileOn = on
+                    if (on && Build.VERSION.SDK_INT >= 33) {
+                        ToggleTileService.requestAdd(context) { added ->
+                            if (added) scope.launch { snackbar.showSnackbar(tileAdded) }
                         }
                     }
                 }
+                ListItem(
+                    modifier = Modifier.clickable { setTile(!tileOn) },
+                    headlineContent = { Text(stringResource(R.string.hub_tile)) },
+                    supportingContent = { Text(stringResource(R.string.hub_tile_desc)) },
+                    trailingContent = { Switch(checked = tileOn, onCheckedChange = { setTile(it) }) },
+                )
             }
             item {
                 Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
