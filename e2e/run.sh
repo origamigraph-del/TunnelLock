@@ -227,8 +227,14 @@ sleep 50
 check_blocked "Disconnected" "$m"
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> GUARDING"; then pass "Disconnect" "TunnelLock is GUARDING"; else fail "Disconnect" "no GUARDING"; fi
 # Disconnected under lockdown: no VPN interface (no key in the status bar), Android blocks.
-tuns=$(sh_ ls /sys/class/net | grep -c '^tun' || true)
-if [ "$tuns" -eq 0 ]; then pass "VPN icon off" "no VPN interface while disconnected"; else fail "VPN icon off" "$tuns VPN interfaces still up"; fi
+# VpnService interfaces are tun0, tun1...; the emulator's kernel also has tunl0 (IP-in-IP).
+tuns=$(sh_ ls /sys/class/net | grep -E '^tun[0-9]+$' | tr '\n' ' ')
+if [ -z "$tuns" ]; then
+    pass "VPN icon off" "no VPN interface while disconnected"
+else
+    pid=$(app_pid)
+    fail "VPN icon off" "VPN interface still up: $tuns| TunnelLock holds $(sh_ ls -l /proc/"$pid"/fd 2>/dev/null | grep -c /dev/tun) TUN fds | VPN networks: $(sh_ dumpsys connectivity | grep -c 'type: VPN')"
+fi
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> CONNECTING"; then
     fail "Stays disconnected" "TunnelLock connected again by itself after a manual disconnect"
 else
