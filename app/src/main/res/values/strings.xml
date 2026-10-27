@@ -203,4 +203,8 @@
     <string name="settings_battery">بدون محدودیت باتری</string>
     <string name="settings_battery_on">فعال است: اندروید TunnelLock را برای صرفه‌جویی در باتری متوقف نمی‌کند.</string>
     <string name="settings_battery_off">برای کار پیوسته در طول روز (به‌خصوص روی سامسونگ) توصیه می‌شود. بزنید تا اجازه بدهید.</string>
+    <string name="hub_outside_title">⚠️ این اپ‌ها بیرون از فضای امن هم نصب هستند</string>
+    <string name="hub_outside_body">نسخهٔ بیرونی هیچ محافظتی ندارد: اگر اشتباهی آن را باز کنید، با IP واقعی شما وصل می‌شود. برای اینکه چنین اشتباهی ممکن نباشد، نسخهٔ بیرونی را حذف کنید. نسخهٔ داخل فضای امن (با آیکون کیف) دست نمی‌خورد.</string>
+    <string name="hub_outside_remove">حذف نسخهٔ بیرونی</string>
+    <string name="hub_outside_disable">غیرفعال کردن</string>
 </resources>
