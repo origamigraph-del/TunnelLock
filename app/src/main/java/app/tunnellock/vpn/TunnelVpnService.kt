@@ -11,6 +11,7 @@ import android.net.Network
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
@@ -42,14 +43,17 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The tunnel. The TUN interface stays up for the whole life of the service, so
- * whenever the proxy is not working the protected apps' packets end up inside
- * the TUN and are dropped there; they never reach the normal network.
+ * The tunnel. While connecting, connected or reconnecting the TUN interface
+ * stays up, so whenever the proxy is not working the protected apps' packets
+ * end up inside the TUN and are dropped there; they never reach the normal network.
  *
- * In the secure space Android's always-on lockdown adds a second layer: if this
- * service is not running at all, the system itself blocks every app.
+ * In the secure space Android's always-on lockdown adds a second layer: with no
+ * VPN interface at all (disconnected, or this service not running) the system
+ * itself blocks every app. So when disconnected under lockdown the interface is
+ * closed and the VPN key leaves the status bar; without lockdown it stays up.
  *
  * Losing the connection only cuts the internet; the apps stay open. They are
  * paused (cannot be opened) only when the user disconnects on purpose and the
@@ -84,6 +88,7 @@ class TunnelVpnService : VpnService() {
         private const val FAILOVER_CANDIDATES = 12
         private const val FAILOVER_PARALLEL = 4
         private const val SUBSCRIPTION_CHECK_MS = 60 * 60 * 1000L
+        private const val BATTERY_SAMPLE_MS = 15 * 60 * 1000L
 
         /** A connect tap gives up after at most this long (OpenVPN keeps retrying on its own otherwise). */
         private const val OPENVPN_MAX_CONNECT_TIMEOUT_MS = 180_000L
@@ -140,6 +145,31 @@ class TunnelVpnService : VpnService() {
     }
     private val openVpn by lazy { OpenVpnEngine(this, openVpnHost) }
 
+    private val batteryLog by lazy { BatteryLog(this) }
+
+    /** Health checks since the last battery sample (each one wakes the radio). */
+    private val healthChecks = AtomicInteger()
+
+    private val powerReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val reason = when (intent.action) {
+                Intent.ACTION_SCREEN_ON -> "screen on"
+                Intent.ACTION_SCREEN_OFF -> "screen off"
+                Intent.ACTION_POWER_CONNECTED -> "charger connected"
+                Intent.ACTION_POWER_DISCONNECTED -> "charger disconnected"
+                PowerManager.ACTION_POWER_SAVE_MODE_CHANGED -> "power saving changed"
+                PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> "idle mode changed"
+                else -> return
+            }
+            scope.launch { sampleBattery(reason) }
+        }
+    }
+
+    private fun sampleBattery(reason: String) {
+        runCatching { batteryLog.sample(reason, TunnelState.status.value.phase, healthChecks.getAndSet(0)) }
+            .onFailure { AppLog.w(TAG, "battery sample failed", it) }
+    }
+
     private val packageReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             // An update of an app that is in use is left alone.
@@ -179,6 +209,26 @@ class TunnelVpnService : VpnService() {
         runCatching {
             getSystemService(ConnectivityManager::class.java).registerDefaultNetworkCallback(networkCallback)
         }
+        ContextCompat.registerReceiver(
+            this,
+            powerReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_POWER_CONNECTED)
+                addAction(Intent.ACTION_POWER_DISCONNECTED)
+                addAction(PowerManager.ACTION_POWER_SAVE_MODE_CHANGED)
+                addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
+            },
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        scope.launch {
+            sampleBattery("battery at start")
+            while (true) {
+                delay(BATTERY_SAMPLE_MS)
+                sampleBattery("battery")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -200,6 +250,7 @@ class TunnelVpnService : VpnService() {
 
     override fun onDestroy() {
         runCatching { unregisterReceiver(packageReceiver) }
+        runCatching { unregisterReceiver(powerReceiver) }
         runCatching { getSystemService(ConnectivityManager::class.java).unregisterNetworkCallback(networkCallback) }
         commands.close()
         scope.cancel()
@@ -496,6 +547,7 @@ class TunnelVpnService : VpnService() {
     }
 
     private fun checkConnectivity(): Boolean {
+        healthChecks.incrementAndGet()
         val ok = TEST_URLS.any { XrayCore.measureDelay(it) >= 0 }
         if (!ok) AppLog.w(TAG, "health check through the tunnel failed")
         return ok
@@ -503,9 +555,16 @@ class TunnelVpnService : VpnService() {
 
     // ---- state changes --------------------------------------------------------
 
-    /** Not connected. The TUN stays up (no internet); the apps are paused only if [pause]. */
+    /**
+     * Not connected: no internet for the apps (Android's lockdown, or TunnelLock's own
+     * interface where lockdown is not active); they are paused only if [pause].
+     */
     private fun enterGuard(error: String? = null, pause: Boolean) {
-        if (ensureTun() == null) {
+        if (Policy.isLockdownActive(this)) {
+            // Android's lockdown already blocks every app while no VPN is up. Without an
+            // interface the VPN key leaves the status bar, so it shows only when connected.
+            closeTun()
+        } else if (ensureTun() == null) {
             setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = error ?: getString(R.string.error_vpn_permission)) }
             return
         }

@@ -2,6 +2,10 @@ package app.tunnellock.ui
 
 import android.app.Activity
 import android.content.ComponentName
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.content.pm.CrossProfileApps
 import android.os.Build
 import android.os.UserHandle
@@ -12,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -250,6 +255,11 @@ private fun PersonalHub(space: UserHandle) {
                     }
                 }
             }
+            // Copies left outside have no protection: one wrong tap and the real IP is out.
+            val outside = apps.orEmpty().filter { it.inSecureSpace && it.packageName != PhoneApps.PROBE_PACKAGE }
+            if (outside.isNotEmpty()) {
+                item { OutsideCopies(outside) }
+            }
             item {
                 val setTile = { on: Boolean ->
                     ToggleTileService.setEnabled(context, on)
@@ -326,6 +336,54 @@ private fun PersonalHub(space: UserHandle) {
             }
         }
     }
+}
+
+@Composable
+private fun OutsideCopies(apps: List<PhoneApp>) {
+    val context = LocalContext.current
+    val color = MaterialTheme.colorScheme.onErrorContainer
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.hub_outside_title),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = color,
+            )
+            Text(stringResource(R.string.hub_outside_body), style = MaterialTheme.typography.bodySmall, color = color)
+            apps.forEach { app ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppIcon(app.info)
+                    Text(
+                        app.label,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = color,
+                    )
+                    TextButton(onClick = { removeOutsideCopy(context, app) }) {
+                        Text(stringResource(if (app.system) R.string.hub_outside_disable else R.string.hub_outside_remove))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Uninstalls the personal copy only (the copy in the secure space is another
+ * user's and stays). Preinstalled apps cannot be uninstalled: their settings
+ * page offers "Disable".
+ */
+private fun removeOutsideCopy(context: Context, app: PhoneApp) {
+    val uri = Uri.parse("package:${app.packageName}")
+    val intent = if (app.system) Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri) else Intent(Intent.ACTION_DELETE, uri)
+    runCatching { context.startActivity(intent) }
 }
 
 @Composable

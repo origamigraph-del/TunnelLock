@@ -192,4 +192,8 @@
     <string name="settings_battery">Unrestricted battery</string>
     <string name="settings_battery_on">On: Android will not stop TunnelLock to save battery.</string>
     <string name="settings_battery_off">Recommended for all-day use (especially on Samsung). Tap to allow.</string>
+    <string name="hub_outside_title">⚠️ These apps are also installed outside the secure space</string>
+    <string name="hub_outside_body">The outside copy has no protection: open it by mistake and it connects with your real IP. Remove the outside copy so that cannot happen. The copy in the secure space (briefcase icon) stays as it is.</string>
+    <string name="hub_outside_remove">Remove outside copy</string>
+    <string name="hub_outside_disable">Disable</string>
 </resources>

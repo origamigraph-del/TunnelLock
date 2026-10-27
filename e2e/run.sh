@@ -173,6 +173,11 @@ if [ "$(verdicts 0 0 | grep -c .)" -lt 2 ]; then
     report
 fi
 pass "TunnelProbe runs" "probing every 3 s inside the secure space"
+if applog | grep -q "I/Battery: battery at start"; then
+    pass "Battery log" "$(applog | grep -m1 'I/Battery:' | cut -d' ' -f4- | cut -c1-160)"
+else
+    fail "Battery log" "no battery sample in TunnelLock's log"
+fi
 
 m=$(mark); sleep 25; check_online "V2Ray online" "$m"
 if grep -q "ipify" "$OUT/xray-access.log" 2>/dev/null; then
@@ -221,6 +226,14 @@ sh_ am start-foreground-service --user "$U" -n $APP/.vpn.TunnelVpnService -a app
 sleep 50
 check_blocked "Disconnected" "$m"
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> GUARDING"; then pass "Disconnect" "TunnelLock is GUARDING"; else fail "Disconnect" "no GUARDING"; fi
+# Disconnected under lockdown: no VPN interface (no key in the status bar), Android blocks.
+tuns=$(sh_ ls /sys/class/net | grep -c '^tun' || true)
+if [ "$tuns" -eq 0 ]; then pass "VPN icon off" "no VPN interface while disconnected"; else fail "VPN icon off" "$tuns VPN interfaces still up"; fi
+if applog | tail -n +"$((from + 1))" | grep -q -- "-> CONNECTING"; then
+    fail "Stays disconnected" "TunnelLock connected again by itself after a manual disconnect"
+else
+    pass "Stays disconnected" "no reconnect after the manual disconnect"
+fi
 
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
