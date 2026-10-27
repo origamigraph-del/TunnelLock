@@ -5,10 +5,13 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.BatteryManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -39,6 +42,8 @@ class ProbeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var lastBatteryLog = 0L
+    private var lastCpuMs = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -66,6 +71,7 @@ class ProbeService : Service() {
                     val started = System.currentTimeMillis()
                     val results = Checks.runAll()
                     ProbeState.record(this@ProbeService, results)
+                    logBatteryIfDue()
                     // Internet works right now: a good moment for logs that could not be sent before.
                     if (results.any { it.reached }) ProbeState.flushOutbox(this@ProbeService)
                     ProbeState.last.value?.let { last ->
@@ -88,6 +94,24 @@ class ProbeService : Service() {
         // Each finished test goes to the developer on its own.
         if (ProbeReport.available && ProbeState.autoSend(this)) ProbeState.sendInBackground(this, ProbeState.sessionText(this))
         super.onDestroy()
+    }
+
+    /**
+     * Every 15 minutes: the battery level and the probe's own CPU time, so its
+     * share can be told apart from TunnelLock's in a day-long test.
+     */
+    private fun logBatteryIfDue() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastBatteryLog != 0L && now - lastBatteryLog < 15 * 60 * 1000L) return
+        val battery = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        val scale = battery?.getIntExtra(BatteryManager.EXTRA_SCALE, 100)?.takeIf { it > 0 } ?: 100
+        val level = battery?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)?.let { it * 100 / scale } ?: -1
+        val charging = (battery?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0) != 0
+        val cpuMs = android.os.Process.getElapsedCpuTime()
+        val cpu = if (lastBatteryLog == 0L) "${cpuMs / 1000} s so far" else "+${(cpuMs - lastCpuMs) / 1000} s in ${(now - lastBatteryLog) / 60_000} min"
+        ProbeState.log(this, "-- battery $level%${if (charging) " (charging)" else ""}, probe CPU $cpu")
+        lastBatteryLog = now
+        lastCpuMs = cpuMs
     }
 
     private fun profileLabel(): String = "user ${android.os.Process.myUid() / 100_000}"

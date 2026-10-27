@@ -21,6 +21,8 @@ data class PhoneApp(
 
 /** Personal-profile side of adding apps: list the phone's apps and hand the picked ones to the secure space. */
 object PhoneApps {
+    /** The leak-test tool: a copy outside the secure space is expected (it reports DIRECT there). */
+    const val PROBE_PACKAGE = "app.tunnellock.probe"
 
     fun list(context: Context): List<PhoneApp> {
         val pm = context.packageManager
