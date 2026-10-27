@@ -28,4 +28,6 @@
     <string name="verdict_direct">Direct, no VPN (normal in the personal profile)</string>
     <string name="battery_off">For long tests: remove the battery limit</string>
     <string name="battery_on">Battery limit removed ✓</string>
+    <string name="precise">Precise mode: a ping every second</string>
+    <string name="precise_hint">Logs every break of 2.5 seconds or more with its start and end. Sends only one small packet a second; use it with a 30 or 60 s test interval.</string>
 </resources>

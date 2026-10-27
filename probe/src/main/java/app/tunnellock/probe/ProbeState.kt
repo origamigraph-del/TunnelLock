@@ -70,6 +70,10 @@ object ProbeState {
     fun setAutoSend(context: Context, value: Boolean) = prefs(context).edit().putBoolean("autoSend", value).apply()
     fun setRealIp(context: Context, value: String) = prefs(context).edit().putString("realIp", value.trim()).apply()
 
+    /** Precise mode: a ping every second (see [Pulse]). Off unless turned on. */
+    fun precise(context: Context) = prefs(context).getBoolean("precise", false)
+    fun setPrecise(context: Context, value: Boolean) = prefs(context).edit().putBoolean("precise", value).apply()
+
     // ---- log -----------------------------------------------------------------
 
     private fun logFile(context: Context) = File(context.filesDir, "probe.log")
@@ -243,7 +247,7 @@ object ProbeState {
         )
     }
 
-    private fun notifyLeak(context: Context, reason: String) {
+    fun notifyLeak(context: Context, reason: String) {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
         val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, LEAK_CHANNEL)
