@@ -29,4 +29,6 @@
     <string name="verdict_direct">مستقیم، بدون VPN (در پروفایل شخصی طبیعی است)</string>
     <string name="battery_off">برای تست طولانی: محدودیت باتری را بردارید</string>
     <string name="battery_on">محدودیت باتری برداشته شده ✓</string>
+    <string name="precise">حالت دقیق: پینگ هر ۱ ثانیه</string>
+    <string name="precise_hint">هر قطعی ۲٫۵ ثانیه یا بیشتر را با ساعت شروع و پایانش ثبت می‌کند. فقط یک بستهٔ کوچک در ثانیه می‌فرستد؛ با آن فاصلهٔ تست را ۳۰ یا ۶۰ ثانیه بگذارید.</string>
 </resources>

@@ -112,7 +112,7 @@ wait_phase() { # <phase> <from line> <seconds>
 
 # Probe verdicts (OK, BLOCKED, LEAK!!, NEW-IP, DIRECT) after line <from>, skipping <skip> rounds.
 verdicts() { # <from> <skip>
-    probelog | tail -n +"$(($1 + 1))" | awk '$2 != "==" && $2 != "--" {print $2}' | tail -n +"$(($2 + 1))"
+    probelog | tail -n +"$(($1 + 1))" | awk '$2 ~ /^(OK|BLOCKED|LEAK!!|NEW-IP|DIRECT)$/ {print $2}' | tail -n +"$(($2 + 1))"
 }
 
 # A blocked round takes up to ~20 s (DNS gives up slowly), so a window sees only
@@ -134,7 +134,7 @@ check_blocked() { # <name> <from>
 check_blocked_until_connected() { # <name> <probe from> <app from>
     local until v total bad
     until=$(applog | tail -n +"$(($3 + 1))" | grep -m1 -- "-> CONNECTED" | awk '{print $2}')
-    v=$(probelog | tail -n +"$(($2 + 1))" | awk -v until="$until" '$2 != "==" && $2 != "--" && (until == "" || $1 < until) {print $2}' | tail -n +2)
+    v=$(probelog | tail -n +"$(($2 + 1))" | awk -v until="$until" '$2 ~ /^(OK|BLOCKED|LEAK!!|NEW-IP|DIRECT)$/ && (until == "" || $1 < until) {print $2}' | tail -n +2)
     total=$(echo "$v" | grep -c . || true)
     bad=$(echo "$v" | grep . | grep -vc '^BLOCKED$' || true)
     if [ "$total" -ge 1 ] && [ "$bad" -eq 0 ]; then
@@ -157,6 +157,10 @@ check_online() { # <name> <from>
     fi
 }
 
+# Precise mode (a ping every second): the breaks it logged after line <from>.
+breaks_after() { probelog | tail -n +"$(($1 + 1))" | grep "~~ BREAK"; }
+break_seconds() { grep -oE 'no answer for [0-9]+' | head -1 | grep -oE '[0-9]+$'; }
+
 # ---- 1. V2Ray ---------------------------------------------------------------------
 
 from=$(applines)
@@ -166,13 +170,13 @@ if wait_phase CONNECTED "$from" 120; then pass "V2Ray connect" "TunnelLock conne
 # TunnelProbe, opened the way a person would, then its test started.
 sh_ am start --user "$U" -n $PROBE/.MainActivity >/dev/null
 sleep 3
-sh_ am start-foreground-service --user "$U" -n $PROBE/.ProbeService >/dev/null
+sh_ am start-foreground-service --user "$U" -n $PROBE/.ProbeService --ez precise true >/dev/null
 sleep 15
 if [ "$(verdicts 0 0 | grep -c .)" -lt 2 ]; then
     fail "TunnelProbe runs" "no probe rounds: $(probelog | tail -5 | tr '\n' ' ') | $(adb logcat -d | grep -iE 'tunnelprobe|app.tunnellock.probe|AndroidRuntime' | tail -15 | cut -c1-200 | oneline)"
     report
 fi
-pass "TunnelProbe runs" "probing every 3 s inside the secure space"
+pass "TunnelProbe runs" "probing every 3 s inside the secure space, precise mode on"
 if applog | grep -q "I/Battery: battery at start"; then
     pass "Battery log" "$(applog | grep -m1 'I/Battery:' | cut -d' ' -f4- | cut -c1-160)"
 else
@@ -185,10 +189,36 @@ if grep -q "ipify" "$OUT/xray-access.log" 2>/dev/null; then
 else
     fail "Through the server" "the probe's requests did not reach the Xray server"
 fi
+if first=$(probelog | grep -m1 "~~ pings answered"); then
+    pass "Precise mode" "${first#* ~~ }"
+else
+    fail "Precise mode" "no ping answered: $(probelog | grep '~~' | tail -3 | tr '\n' ' ')"
+fi
+if [ -z "$(breaks_after "$m")" ]; then
+    pass "Precise: steady" "no break logged while connected"
+else
+    fail "Precise: steady" "breaks while connected: $(breaks_after "$m" | head -3 | cut -d' ' -f3- | tr '\n' ' ')"
+fi
+
+# ---- 1b. the server stalls for 5 s: too short for TunnelLock's 15 s check ---------------
+
+m=$(mark)
+xray_pid=$(cat "$OUT/xray.pid")
+kill -STOP "$xray_pid"
+sleep 5
+kill -CONT "$xray_pid"
+sleep 10
+stall=$(breaks_after "$m" | head -1)
+secs=$(echo "$stall" | break_seconds)
+if [ -n "$secs" ] && [ "$secs" -ge 3 ] && [ "$secs" -le 10 ]; then
+    pass "Precise: 5 s stall" "${stall#* ~~ }"
+else
+    fail "Precise: 5 s stall" "expected one break of about 5 s, got: ${stall:-none}"
+fi
 
 # ---- 2. server dies mid-use ----------------------------------------------------------
 
-m=$(mark); from=$(applines)
+m=$(mark); from=$(applines); m_down=$m
 "$ROOT/e2e/servers.sh" stop xray
 sleep 50
 check_blocked "V2Ray server down" "$m"
@@ -200,6 +230,13 @@ from=$(applines)
 "$ROOT/e2e/servers.sh" start xray
 if wait_phase CONNECTED "$from" 120; then pass "V2Ray reconnect" "connected again by itself"; else fail "V2Ray reconnect" "no CONNECTED within 120 s"; fi
 m=$(mark); sleep 20; check_online "V2Ray online again" "$m"
+outage=$(breaks_after "$m_down" | head -1)
+secs=$(echo "$outage" | break_seconds)
+if [ -n "$secs" ] && [ "$secs" -ge 40 ]; then
+    pass "Precise: server down" "${outage#* ~~ }"
+else
+    fail "Precise: server down" "expected a break of the whole outage (50 s or more), got: ${outage:-none}"
+fi
 
 # ---- 4. TunnelLock killed: Android's lockdown must block on its own ------------------
 
