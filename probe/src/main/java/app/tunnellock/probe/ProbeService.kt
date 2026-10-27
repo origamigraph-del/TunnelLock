@@ -28,6 +28,7 @@ class ProbeService : Service() {
 
     companion object {
         private const val ACTION_STOP = "app.tunnellock.probe.STOP"
+        private const val EXTRA_PRECISE = "precise"
         private const val NOTIFICATION_ID = 1
 
         fun start(context: Context) {
@@ -41,6 +42,7 @@ class ProbeService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var loop: Job? = null
+    @Volatile private var pulse: Pulse? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var lastBatteryLog = 0L
     private var lastCpuMs = 0L
@@ -56,6 +58,8 @@ class ProbeService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        // The emulator test turns precise mode on this way (the service is not exported).
+        if (intent?.hasExtra(EXTRA_PRECISE) == true) ProbeState.setPrecise(this, intent.getBooleanExtra(EXTRA_PRECISE, false))
         if (loop == null) {
             // Every probe request must open a new connection.
             System.setProperty("http.keepAlive", "false")
@@ -82,11 +86,24 @@ class ProbeService : Service() {
                     delay(wait.coerceAtLeast(500))
                 }
             }
+            // Precise mode runs next to the rounds and follows its switch while the test runs.
+            scope.launch {
+                while (isActive) {
+                    if (ProbeState.precise(this@ProbeService)) {
+                        val current = Pulse(this@ProbeService).also { pulse = it }
+                        current.run { ProbeState.precise(this@ProbeService) }
+                        current.finish()
+                        pulse = null
+                    }
+                    delay(1_000)
+                }
+            }
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        pulse?.finish()
         scope.cancel()
         runCatching { wakeLock?.release() }
         ProbeState.setRunning(false)

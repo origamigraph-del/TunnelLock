@@ -185,6 +185,18 @@ object ProbeLogic {
             .put(transactionId)
             .array()
 
+    /** A transaction ID that carries a ping's number after a per-run random [session] prefix (8 bytes). */
+    fun pingTransaction(session: ByteArray, seq: Int): ByteArray = ByteBuffer.allocate(12).put(session).putInt(seq).array()
+
+    /** The ping number and mapped address of an answer to one of [session]'s pings, or null for anything else. */
+    fun parsePingAnswer(data: ByteArray, length: Int, session: ByteArray): Pair<Int, String?>? {
+        if (length < 20) return null
+        val transactionId = data.copyOfRange(8, 20)
+        if (!transactionId.copyOfRange(0, 8).contentEquals(session)) return null
+        if (((data[0].toInt() and 0xff) shl 8 or (data[1].toInt() and 0xff)) != 0x0101) return null
+        return ByteBuffer.wrap(transactionId, 8, 4).int to parseStunResponse(data, length, transactionId)
+    }
+
     /** Returns the mapped address of a STUN Binding Success response, or null. */
     fun parseStunResponse(data: ByteArray, length: Int, transactionId: ByteArray): String? {
         if (length < 20) return null

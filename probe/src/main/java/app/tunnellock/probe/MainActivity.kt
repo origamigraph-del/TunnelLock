@@ -96,6 +96,7 @@ private fun ProbeScreen() {
     var home by remember { mutableStateOf(ProbeState.homeCountry(context)) }
     var realIp by remember { mutableStateOf(ProbeState.realIp(context)) }
     var autoSend by remember { mutableStateOf(ProbeState.autoSend(context)) }
+    var precise by remember { mutableStateOf(ProbeState.precise(context)) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         ProbeService.start(context)
     }
@@ -207,6 +208,19 @@ private fun ProbeScreen() {
                                 },
                                 label = { Text("${seconds}s") },
                             )
+                        }
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Switch(
+                            checked = precise,
+                            onCheckedChange = {
+                                precise = it
+                                ProbeState.setPrecise(context, it)
+                            },
+                        )
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(R.string.precise), style = MaterialTheme.typography.labelLarge)
+                            Text(stringResource(R.string.precise_hint), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

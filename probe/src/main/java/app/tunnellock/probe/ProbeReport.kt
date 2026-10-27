@@ -15,6 +15,7 @@ object ProbeReport {
             "TunnelProbe ${BuildConfig.VERSION_NAME}, ${if (workProfile) "secure space" else "personal profile"} (user ${android.os.Process.myUid() / 100_000})",
             "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}), ${Build.MANUFACTURER} ${Build.MODEL}",
             "home country ${ProbeState.homeCountry(context)}, real IP set: ${ProbeState.realIp(context).isNotEmpty()}",
+            "test every ${ProbeState.intervalSeconds(context)} s, precise mode ${if (ProbeState.precise(context)) "on" else "off"}",
         )
         LogUploader.postLog(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, "TunnelProbe log", details, log)
     }
