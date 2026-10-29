@@ -71,8 +71,16 @@ object XrayCore {
         private val connectivity = context.getSystemService(ConnectivityManager::class.java)
         private var lastWarning = 0L
 
+        /** Xray asks once per app rule for the same connection: recent answers by connection. */
+        private val recent = object : LinkedHashMap<String, Pair<Int, Long>>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<Int, Long>>?) = size > 256
+        }
+
         override fun findProcessByConnection(network: String?, srcIP: String?, srcPort: Long, destIP: String?, destPort: Long): Long {
             if (Build.VERSION.SDK_INT < 29 || srcIP == null || destIP == null) return -1
+            val key = "$network $srcIP $srcPort $destIP $destPort"
+            val now = SystemClock.elapsedRealtime()
+            synchronized(recent) { recent[key]?.takeIf { now - it.second < 2_000 }?.let { return it.first.toLong() } }
             val uid = runCatching {
                 val protocol = if (network == "udp") OsConstants.IPPROTO_UDP else OsConstants.IPPROTO_TCP
                 connectivity.getConnectionOwnerUid(
@@ -81,8 +89,8 @@ object XrayCore {
                     InetSocketAddress(InetAddresses.parseNumericAddress(destIP), destPort.toInt()),
                 )
             }.getOrDefault(-1)
+            synchronized(recent) { recent[key] = uid to now }
             if (uid < 0) {
-                val now = SystemClock.elapsedRealtime()
                 if (now - lastWarning > 60_000) {
                     lastWarning = now
                     AppLog.w(TAG, "unknown app for a $network connection to port $destPort: dropped unless DNS (logged once a minute)")

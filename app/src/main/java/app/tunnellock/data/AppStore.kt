@@ -35,8 +35,11 @@ data class Subscription(
     val usage: SubscriptionUsage? = null,
 )
 
-/** An app's own server, by link (ids change when a subscription is refreshed) and by name as a fallback. */
-data class AppServer(val link: String, val name: String)
+/**
+ * An app's own server, by link (ids change when a subscription is refreshed). After a
+ * refresh that changed the link it is found again by name, only within its subscription.
+ */
+data class AppServer(val link: String, val name: String, val subscriptionId: String? = null)
 
 data class SubscriptionUsage(
     val usedBytes: Long,
@@ -203,7 +206,11 @@ class AppStore(context: Context) {
     /** Gives [pkg] its own server, or back to the main server with null. */
     @Synchronized
     fun setAppServer(pkg: String, server: StoredServer?) {
-        val updated = if (server == null) _appServers.value - pkg else _appServers.value + (pkg to AppServer(server.link, server.name))
+        val updated = if (server == null) {
+            _appServers.value - pkg
+        } else {
+            _appServers.value + (pkg to AppServer(server.link, server.name, server.subscriptionId))
+        }
         saveAppServers(updated)
     }
 
@@ -214,9 +221,17 @@ class AppStore(context: Context) {
         if (kept.size != _appServers.value.size) saveAppServers(kept)
     }
 
-    /** The server an app was given, found again after a subscription refresh by name. Null if it is gone. */
-    fun serverFor(choice: AppServer): StoredServer? =
-        _servers.value.find { it.link == choice.link } ?: _servers.value.find { it.name == choice.name }
+    /**
+     * The server an app was given; null if it is gone. A subscription refresh may change
+     * its link: then the one server of the same name in the same subscription is it.
+     * Anything less certain is no match, so the app is cut off rather than moved.
+     */
+    fun serverFor(choice: AppServer): StoredServer? {
+        val servers = _servers.value
+        servers.find { it.link == choice.link }?.let { return it }
+        val subscription = choice.subscriptionId ?: return null
+        return servers.filter { it.subscriptionId == subscription && it.name == choice.name }.singleOrNull()
+    }
 
     fun selectedServer(): StoredServer? = _servers.value.find { it.id == _selectedId.value }
 
@@ -277,7 +292,9 @@ class AppStore(context: Context) {
     private fun saveAppServers(map: Map<String, AppServer>) {
         _appServers.value = map
         val o = JSONObject()
-        map.forEach { (pkg, server) -> o.put(pkg, JSONObject().put("link", server.link).put("name", server.name)) }
+        map.forEach { (pkg, server) ->
+            o.put(pkg, JSONObject().put("link", server.link).put("name", server.name).putOpt("subscriptionId", server.subscriptionId))
+        }
         prefs.edit().putString(KEY_APP_SERVERS, o.toString()).apply()
     }
 
@@ -285,7 +302,7 @@ class AppStore(context: Context) {
         val o = runCatching { JSONObject(prefs.getString(KEY_APP_SERVERS, "{}") ?: "{}") }.getOrElse { JSONObject() }
         return o.keys().asSequence().mapNotNull { pkg ->
             val v = o.optJSONObject(pkg) ?: return@mapNotNull null
-            pkg to AppServer(v.optString("link"), v.optString("name"))
+            pkg to AppServer(v.optString("link"), v.optString("name"), v.optString("subscriptionId").takeIf { it.isNotEmpty() })
         }.toMap()
     }
 

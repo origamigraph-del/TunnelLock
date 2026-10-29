@@ -159,6 +159,22 @@ class XrayConfigBuilderTest {
         assertFalse(rules[2].getString("port").split(',').any { "53" in it.split('-') })
         assertEquals("dns-out", rules[3].getString("outboundTag"))
         assertEquals(4, rules.size)
+        // Sniffed domains must not replace the address the app is found by.
+        val sniffing = c.getJSONArray("inbounds").getJSONObject(0).getJSONObject("sniffing")
+        assertTrue(sniffing.getBoolean("routeOnly"))
+    }
+
+    @Test
+    fun sniffingOverridesAsBeforeWithoutAppRoutes() {
+        val c = JSONObject(XrayConfigBuilder.build(LinkParser.parse("vless://u@a.example:443#a")))
+        assertFalse(c.getJSONArray("inbounds").getJSONObject(0).getJSONObject("sniffing").optBoolean("routeOnly"))
+    }
+
+    @Test
+    fun fakeDnsConfigsCannotCarryAppRoutes() {
+        val fake = """{"dns":{"servers":["fakedns"]},"outbounds":[{"tag":"proxy","protocol":"vless","settings":{}}]}"""
+        assertFalse(XrayConfigBuilder.canCarryAppRoutes(LinkParser.parse(fake)))
+        assertTrue(XrayConfigBuilder.canCarryAppRoutes(LinkParser.parse("vless://u@a.example:443#a")))
     }
 
     @Test
@@ -175,6 +191,7 @@ class XrayConfigBuilderTest {
         assertEquals("tl-app-1", rules[0].getString("outboundTag"))
         assertEquals("tl-block", rules[1].getString("outboundTag"))
         assertEquals("example.com", rules[2].getJSONArray("domain").getString(0))
+        assertTrue(c.getJSONArray("inbounds").getJSONObject(0).getJSONObject("sniffing").getBoolean("routeOnly"))
     }
 
     @Test

@@ -51,12 +51,28 @@ object XrayConfigBuilder {
     fun canRouteApps(profile: ServerProfile): Boolean = profile.protocol.isXray && profile.protocol != Protocol.CUSTOM
 
     /**
+     * Whether a main server's config can send apps to their own servers. A config with
+     * FakeDNS cannot: its connections only have made-up addresses, and the app of a
+     * connection is found by its real one.
+     */
+    fun canCarryAppRoutes(main: ServerProfile): Boolean =
+        main.protocol.isXray && (main.protocol != Protocol.CUSTOM || main.rawConfig?.contains("fakedns", ignoreCase = true) != true)
+
+    /**
      * Each app with its own server goes only there: its rule comes first (its DNS
      * included), and if that server fails it has no internet, never the main server.
      * A connection whose app is unknown is dropped rather than risk the wrong server
      * (DNS aside, which stays with the main server's resolver).
      */
     private fun addAppRoutes(root: JSONObject, appRoutes: List<AppRoute>): JSONObject {
+        // Sniffing may only inform routing: if it replaced a connection's address with the
+        // sniffed domain, the connection's app could no longer be found and it would end
+        // up on the main server.
+        root.optJSONArray("inbounds")?.let { inbounds ->
+            for (i in 0 until inbounds.length()) {
+                inbounds.optJSONObject(i)?.optJSONObject("sniffing")?.put("routeOnly", true)
+            }
+        }
         val outbounds = root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
         val rules = JSONArray()
         appRoutes.filter { it.uids.isNotEmpty() }.forEachIndexed { i, route ->
