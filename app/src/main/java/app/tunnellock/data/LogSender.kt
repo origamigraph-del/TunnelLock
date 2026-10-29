@@ -32,6 +32,10 @@ object LogSender {
                         "servers ${store.servers.value.size}, subscriptions ${store.subscriptions.value.size}, " +
                             "failover ${store.failover.value}, pause ${store.pauseWhenDisconnected.value}, auto-connect ${store.autoConnect.value}",
                     )
+                    val own = store.appServers.value.values
+                    if (own.isNotEmpty()) {
+                        add("apps on their own server: ${own.size} (${own.count { store.serverFor(it) == null }} with a deleted server)")
+                    }
                 }
             }
             LogUploader.postLog(BuildConfig.LOG_TOKEN, BuildConfig.LOG_REPO, BuildConfig.LOG_ISSUE, "TunnelLock log", details, AppLog.fullText())

@@ -85,8 +85,8 @@ kill_app() {
 }
 
 # Writes the server list and the selection, then (re)starts TunnelLock; it connects on its own.
-start_with() { # <xray|ovpn> [password]
-    python3 "$ROOT/e2e/prefs.py" "$OUT/xray.link" "$OUT/client.ovpn" "$1" "${2:-$OVPN_PASSWORD}" >"$OUT/tunnellock.xml"
+start_with() { # <xray|ovpn> [password] [package that gets server B as its own]
+    python3 "$ROOT/e2e/prefs.py" "$OUT/xray.link" "$OUT/client.ovpn" "$1" "${2:-$OVPN_PASSWORD}" "$OUT/xray-b.link" ${3:+"$3"} >"$OUT/tunnellock.xml"
     adb push "$OUT/tunnellock.xml" /data/local/tmp/tunnellock.xml >/dev/null
     local uid ctx
     uid=$(sh_ stat -c %u "$DATA")
@@ -278,6 +278,42 @@ else
     pass "Stays disconnected" "no reconnect after the manual disconnect"
 fi
 
+# ---- 5b. TunnelProbe on its own server B; the main server A must never carry it --------
+
+ipify_after() { tail -n +"$(($2 + 1))" "$OUT/$1-access.log" 2>/dev/null | grep -c ipify || true; }
+lines_of() { wc -l <"$OUT/$1-access.log" 2>/dev/null || echo 0; }
+
+from=$(applines)
+start_with xray "$OVPN_PASSWORD" "$PROBE"
+if wait_phase CONNECTED "$from" 120; then
+    pass "Own server connect" "$(applog | tail -n +"$((from + 1))" | grep -m1 "own servers:" | cut -d' ' -f4-)"
+else
+    fail "Own server connect" "no CONNECTED within 120 s"
+fi
+a0=$(lines_of xray); b0=$(lines_of xray-b)
+m=$(mark); sleep 25; check_online "Own server online" "$m"
+a=$(ipify_after xray "$a0"); b=$(ipify_after xray-b "$b0")
+if [ "$b" -gt 0 ] && [ "$a" -eq 0 ]; then
+    pass "Own server only" "the probe's requests went to server B ($b), none to the main server"
+else
+    fail "Own server only" "server B carried $b of the probe's requests, the main server $a"
+fi
+
+# B goes down: the probe gets nothing (never the main server), the main connection stays.
+m=$(mark); from=$(applines); a0=$(lines_of xray)
+"$ROOT/e2e/servers.sh" stop xray-b
+sleep 40
+check_blocked "Own server down" "$m"
+a=$(ipify_after xray "$a0")
+if [ "$a" -eq 0 ]; then pass "No fallback" "nothing of the probe went to the main server while B was down"; else fail "No fallback" "$a probe requests went to the main server"; fi
+if applog | tail -n +"$((from + 1))" | grep -q -- "-> RECONNECTING"; then
+    fail "Main server unaffected" "TunnelLock dropped the main connection"
+else
+    pass "Main server unaffected" "TunnelLock stayed connected through the main server"
+fi
+"$ROOT/e2e/servers.sh" start xray-b
+m=$(mark); sleep 25; check_online "Own server back" "$m"
+
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
 from=$(applines)
@@ -285,6 +321,19 @@ start_with ovpn
 if wait_phase CONNECTED "$from" 150; then pass "OpenVPN connect" "connected with username and password"; else fail "OpenVPN connect" "no CONNECTED within 150 s"; fi
 m=$(mark); sleep 25; check_online "OpenVPN online" "$m"
 if sudo grep -q "e2e" "$OUT/openvpn-status.log" 2>/dev/null; then pass "OpenVPN server" "the server lists the emulator as a client"; else fail "OpenVPN server" "the client is not in the server's status"; fi
+
+# ---- 6b. an app with its own V2Ray server while the main server is OpenVPN: cut off ------
+
+from=$(applines)
+start_with ovpn "$OVPN_PASSWORD" "$PROBE"
+if wait_phase CONNECTED "$from" 150; then
+    m=$(mark); sleep 30; check_blocked "Own server under OpenVPN" "$m"
+else
+    fail "Own server under OpenVPN" "OpenVPN did not connect within 150 s"
+fi
+from=$(applines)
+start_with ovpn
+wait_phase CONNECTED "$from" 150 || fail "OpenVPN again" "no CONNECTED within 150 s"
 
 # ---- 7. OpenVPN server dies mid-use and comes back ------------------------------------
 

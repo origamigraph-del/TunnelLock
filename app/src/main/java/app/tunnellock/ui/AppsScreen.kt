@@ -2,10 +2,14 @@ package app.tunnellock.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
+import app.tunnellock.data.StoredServer
 import app.tunnellock.strict.CloneActivity
 import app.tunnellock.strict.CloneQueue
 import app.tunnellock.strict.CloneStatus
@@ -59,6 +65,7 @@ fun AppsScreen(vm: MainViewModel) {
     var canInstall by remember { mutableStateOf(context.packageManager.canRequestPackageInstalls()) }
     var toRemove by remember { mutableStateOf<ProtectedApp?>(null) }
     var options by remember { mutableStateOf<String?>(null) }
+    var pickServer by remember { mutableStateOf<String?>(null) }
 
     LifecycleResumeEffect(Unit) {
         canInstall = context.packageManager.canRequestPackageInstalls()
@@ -133,7 +140,14 @@ fun AppsScreen(vm: MainViewModel) {
                         else -> R.string.home_apps_blocked
                     },
                 )
-                val note = if (app.neverPause) " · " + stringResource(R.string.apps_never_pause_badge) else ""
+                val note = listOfNotNull(
+                    stringResource(R.string.apps_never_pause_badge).takeIf { app.neverPause },
+                    when {
+                        app.ownServerMissing -> stringResource(R.string.apps_server_missing)
+                        app.ownServer != null -> stringResource(R.string.apps_server_badge, app.ownServer)
+                        else -> null
+                    },
+                ).joinToString("") { " · $it" }
                 ListItem(
                     modifier = Modifier.clickable { options = app.packageName },
                     leadingContent = { AppIcon(app.info) },
@@ -154,11 +168,28 @@ fun AppsScreen(vm: MainViewModel) {
         AppOptionsDialog(
             app = app,
             onNeverPause = { vm.setNeverPause(app, it) },
+            onServer = {
+                options = null
+                pickServer = app.packageName
+            },
             onRemove = {
                 options = null
                 toRemove = app
             },
             onDismiss = { options = null },
+        )
+    }
+
+    apps?.find { it.packageName == pickServer }?.let { app ->
+        ServerPickerDialog(
+            app = app,
+            choices = remember(app.packageName) { vm.appServerChoices() },
+            mainIsOpenVpn = vm.mainIsOpenVpn(),
+            onPick = { server ->
+                pickServer = null
+                vm.setAppServer(app, server)
+            },
+            onDismiss = { pickServer = null },
         )
     }
 
@@ -178,6 +209,7 @@ fun AppsScreen(vm: MainViewModel) {
 private fun AppOptionsDialog(
     app: ProtectedApp,
     onNeverPause: (Boolean) -> Unit,
+    onServer: () -> Unit,
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -186,13 +218,29 @@ private fun AppOptionsDialog(
         icon = { AppIcon(app.info) },
         title = { Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         text = {
-            ListItem(
-                modifier = Modifier.clickable { onNeverPause(!app.neverPause) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                headlineContent = { Text(stringResource(R.string.apps_never_pause)) },
-                supportingContent = { Text(stringResource(R.string.apps_never_pause_desc)) },
-                trailingContent = { Switch(checked = app.neverPause, onCheckedChange = onNeverPause) },
-            )
+            Column {
+                ListItem(
+                    modifier = Modifier.clickable { onNeverPause(!app.neverPause) },
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    headlineContent = { Text(stringResource(R.string.apps_never_pause)) },
+                    supportingContent = { Text(stringResource(R.string.apps_never_pause_desc)) },
+                    trailingContent = { Switch(checked = app.neverPause, onCheckedChange = onNeverPause) },
+                )
+                ListItem(
+                    modifier = Modifier.clickable(onClick = onServer),
+                    colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                    headlineContent = { Text(stringResource(R.string.apps_server)) },
+                    supportingContent = {
+                        Text(
+                            when {
+                                app.ownServerMissing -> stringResource(R.string.apps_server_missing)
+                                app.ownServer != null -> app.ownServer
+                                else -> stringResource(R.string.apps_server_main)
+                            },
+                        )
+                    },
+                )
+            }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
         dismissButton = {
@@ -200,5 +248,65 @@ private fun AppOptionsDialog(
                 Text(stringResource(R.string.apps_remove_from_space), color = MaterialTheme.colorScheme.error)
             }
         },
+    )
+}
+
+/** The app's own server: only through it, and no internet when it is down. */
+@Composable
+private fun ServerPickerDialog(
+    app: ProtectedApp,
+    choices: List<StoredServer>,
+    mainIsOpenVpn: Boolean,
+    onPick: (StoredServer?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.apps_server)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text(
+                    stringResource(R.string.apps_server_desc, app.label),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (mainIsOpenVpn) Warning(stringResource(R.string.apps_server_openvpn))
+                if (Build.VERSION.SDK_INT < 29) Warning(stringResource(R.string.apps_server_old_android))
+                ServerChoice(
+                    label = stringResource(R.string.apps_server_main),
+                    selected = app.ownServer == null && !app.ownServerMissing,
+                    onClick = { onPick(null) },
+                )
+                choices.forEach { server ->
+                    ServerChoice(
+                        label = server.name,
+                        selected = server.name == app.ownServer && !app.ownServerMissing,
+                        onClick = { onPick(server) },
+                    )
+                }
+                if (choices.isEmpty()) Text(stringResource(R.string.apps_server_none), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_close)) } },
+    )
+}
+
+@Composable
+private fun Warning(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.error,
+        modifier = Modifier.padding(top = 8.dp),
+    )
+}
+
+@Composable
+private fun ServerChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    ListItem(
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+        leadingContent = { RadioButton(selected = selected, onClick = onClick) },
+        headlineContent = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
     )
 }

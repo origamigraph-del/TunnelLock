@@ -171,6 +171,14 @@
     <string name="apps_options">گزینه‌ها</string>
     <string name="apps_never_pause">همیشه قابل باز شدن</string>
     <string name="apps_never_pause_desc">این اپ وقتی قطع هستید هم متوقف نمی‌شود و باز می‌شود، ولی تا وقتی وصل نشوید اینترنت ندارد.</string>
+    <string name="apps_server">سرور این اپ</string>
+    <string name="apps_server_main">سرور اصلی (پیش‌فرض)</string>
+    <string name="apps_server_desc">%1$s فقط از سروری که اینجا انتخاب کنید به اینترنت می‌رود. اگر آن سرور قطع شود، این اپ اینترنت ندارد و هیچ‌وقت سراغ سرور اصلی نمی‌رود.</string>
+    <string name="apps_server_badge">سرور: %1$s</string>
+    <string name="apps_server_missing">سرورش حذف شده، اینترنت ندارد</string>
+    <string name="apps_server_openvpn">سرور اصلی الان OpenVPN است: تا وقتی همین است، اپ‌هایی که سرور جدا دارند اینترنت ندارند.</string>
+    <string name="apps_server_old_android">این قابلیت اندروید ۱۰ یا بالاتر لازم دارد؛ روی این گوشی اپ‌هایی که سرور جدا دارند اینترنت ندارند.</string>
+    <string name="apps_server_none">برای این کار یک سرور V2Ray دیگر هم لازم است (سرورهای OpenVPN و کانفیگ‌های کامل JSON نمی‌شوند).</string>
     <string name="apps_never_pause_badge">همیشه باز</string>
     <string name="apps_remove_from_space">حذف از فضای امن</string>
     <string name="dialog_close">بستن</string>

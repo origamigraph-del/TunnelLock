@@ -1,12 +1,19 @@
 package app.tunnellock.vpn
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.InetAddresses
+import android.os.Build
+import android.os.SystemClock
+import android.system.OsConstants
 import android.util.Log
 import app.tunnellock.data.AppLog
 import go.Seq
 import libv2ray.CoreCallbackHandler
 import libv2ray.CoreController
 import libv2ray.Libv2ray
+import libv2ray.ProcessFinder
+import java.net.InetSocketAddress
 
 /** Thin wrapper around the Xray core (AndroidLibXrayLite / gomobile). */
 object XrayCore {
@@ -19,7 +26,11 @@ object XrayCore {
         controller?.let { return it }
         Seq.setContext(context.applicationContext)
         Libv2ray.initCoreEnv(context.filesDir.absolutePath, "")
-        return Libv2ray.newCoreController(Callback).also { controller = it }
+        return Libv2ray.newCoreController(Callback).also {
+            // Lets routing rules match connections by app ("process" = the app's UID).
+            if (Build.VERSION.SDK_INT >= 29) it.registerProcessFinder(AppFinder(context.applicationContext))
+            controller = it
+        }
     }
 
     /** Starts Xray reading packets from [tunFd]. Xray works on its own duplicate of the descriptor. */
@@ -51,6 +62,35 @@ object XrayCore {
 
     fun version(context: Context): String =
         runCatching { controller(context); Libv2ray.checkVersionX() }.getOrDefault("?")
+
+    /**
+     * Which app a connection in the tunnel belongs to. Android answers only the
+     * VPN app, and only for connections that went through its interface.
+     */
+    private class AppFinder(context: Context) : ProcessFinder {
+        private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+        private var lastWarning = 0L
+
+        override fun findProcessByConnection(network: String?, srcIP: String?, srcPort: Long, destIP: String?, destPort: Long): Long {
+            if (Build.VERSION.SDK_INT < 29) return -1
+            val uid = runCatching {
+                val protocol = if (network == "udp") OsConstants.IPPROTO_UDP else OsConstants.IPPROTO_TCP
+                connectivity.getConnectionOwnerUid(
+                    protocol,
+                    InetSocketAddress(InetAddresses.parseNumericAddress(srcIP), srcPort.toInt()),
+                    InetSocketAddress(InetAddresses.parseNumericAddress(destIP), destPort.toInt()),
+                )
+            }.getOrDefault(-1)
+            if (uid < 0) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastWarning > 60_000) {
+                    lastWarning = now
+                    AppLog.w(TAG, "unknown app for a $network connection to port $destPort: dropped unless DNS (logged once a minute)")
+                }
+            }
+            return uid.toLong()
+        }
+    }
 
     private object Callback : CoreCallbackHandler {
         override fun startup(): Long = 0
