@@ -18,6 +18,12 @@ data class CoreOptions(
 )
 
 /**
+ * Apps that go through their own server instead of the main one, by Android UID.
+ * A null [profile] (the server is gone or cannot run on Xray) cuts them off.
+ */
+data class AppRoute(val uids: List<Int>, val profile: ServerProfile?)
+
+/**
  * Builds the Xray JSON config. Everything that enters the TUN goes to the proxy;
  * DNS queries are answered by Xray's own resolver, whose upstream (DoH) also goes
  * through the proxy. Nothing is sent out directly, so there is no leak path.
@@ -26,10 +32,53 @@ object XrayConfigBuilder {
     const val TUN_TAG = "tun-in"
     const val PROXY_TAG = "proxy"
     const val DNS_TAG = "dns-out"
+    const val APP_TAG_PREFIX = "tl-app-"
+    const val APP_BLOCK_TAG = "tl-block"
 
-    fun build(profile: ServerProfile, options: CoreOptions = CoreOptions()): String {
+    /**
+     * Xray names a connection's app by its UID once TunnelLock registers a lookup;
+     * "-1" is a connection whose app Android could not tell.
+     */
+    const val UNKNOWN_APP = "-1"
+
+    fun build(profile: ServerProfile, options: CoreOptions = CoreOptions(), appRoutes: List<AppRoute> = emptyList()): String {
         require(profile.protocol.isXray) { "${profile.protocol.label} does not run on Xray" }
-        return if (profile.protocol == Protocol.CUSTOM) buildCustom(profile, options) else buildStandard(profile, options)
+        val config = if (profile.protocol == Protocol.CUSTOM) buildCustom(profile, options) else buildStandard(profile, options)
+        return if (appRoutes.isEmpty()) config else addAppRoutes(JSONObject(config), appRoutes).toString()
+    }
+
+    /** Whether a server can be some apps' own server (a plain Xray outbound, not a whole JSON config). */
+    fun canRouteApps(profile: ServerProfile): Boolean = profile.protocol.isXray && profile.protocol != Protocol.CUSTOM
+
+    /**
+     * Each app with its own server goes only there: its rule comes first (its DNS
+     * included), and if that server fails it has no internet, never the main server.
+     * A connection whose app is unknown is dropped rather than risk the wrong server
+     * (DNS aside, which stays with the main server's resolver).
+     */
+    private fun addAppRoutes(root: JSONObject, appRoutes: List<AppRoute>): JSONObject {
+        val outbounds = root.optJSONArray("outbounds") ?: JSONArray().also { root.put("outbounds", it) }
+        val rules = JSONArray()
+        appRoutes.filter { it.uids.isNotEmpty() }.forEachIndexed { i, route ->
+            val target = route.profile?.takeIf { canRouteApps(it) }?.let { server ->
+                val tag = APP_TAG_PREFIX + (i + 1)
+                outbounds.put(outbound(server).put("tag", tag))
+                tag
+            } ?: APP_BLOCK_TAG
+            rules.put(JSONObject().put("process", JSONArray(route.uids.map { it.toString() })).put("outboundTag", target))
+        }
+        rules.put(
+            JSONObject()
+                .put("process", JSONArray().put(UNKNOWN_APP))
+                .put("port", "0-52,54-65535")
+                .put("outboundTag", APP_BLOCK_TAG),
+        )
+        outbounds.put(JSONObject().put("tag", APP_BLOCK_TAG).put("protocol", "blackhole"))
+        val routing = root.optJSONObject("routing") ?: JSONObject().also { root.put("routing", it) }
+        val existing = routing.optJSONArray("rules") ?: JSONArray()
+        for (i in 0 until existing.length()) rules.put(existing.get(i))
+        routing.put("rules", rules)
+        return root
     }
 
     private fun buildStandard(profile: ServerProfile, options: CoreOptions): String {

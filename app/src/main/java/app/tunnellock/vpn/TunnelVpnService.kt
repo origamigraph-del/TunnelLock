@@ -20,6 +20,7 @@ import app.tunnellock.TunnelLockApp
 import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
 import app.tunnellock.core.openvpn.OpenVpnConfig
+import app.tunnellock.core.xray.AppRoute
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
@@ -130,6 +131,9 @@ class TunnelVpnService : VpnService() {
     @Volatile private var currentNetwork: Network? = null
     @Volatile private var networkKnown = false
     private var lastSubscriptionCheck = 0L
+
+    /** Apps the current interface leaves out (see [excludedApps]). */
+    private var tunExcluded: Set<String> = emptySet()
 
     /** What the current interface was built for, when OpenVPN asked for it; null for TunnelLock's own. */
     private var openVpnTun: OpenVpnTun? = null
@@ -332,7 +336,7 @@ class TunnelVpnService : VpnService() {
             setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
             return
         }
-        val config = XrayConfigBuilder.build(profile, CoreOptions(mtu = MTU))
+        val config = xrayConfig(profile, log = true)
         session = scope.launch { runSession(server, config, fd, mode, pauseOnFailure) }
     }
 
@@ -455,7 +459,43 @@ class TunnelVpnService : VpnService() {
             return null
         }
         AppLog.i(TAG, "failover: ${working.size} answered, switching to the fastest (${best.third} ms)")
-        return runCatching { best.first to XrayConfigBuilder.build(best.second, CoreOptions(mtu = MTU)) }.getOrNull()
+        return runCatching { best.first to xrayConfig(best.second) }.getOrNull()
+    }
+
+    /** The tunnel config for a main server, with the apps that have their own server. */
+    private fun xrayConfig(profile: ServerProfile, log: Boolean = false): String {
+        val routes = appRoutes()
+        if (log && routes.isNotEmpty()) {
+            val cutOff = routes.filter { route -> route.profile?.let { XrayConfigBuilder.canRouteApps(it) } != true }.sumOf { it.uids.size }
+            AppLog.i(TAG, "own servers: ${routes.sumOf { it.uids.size }} apps on ${routes.size} servers" + if (cutOff > 0) ", $cutOff cut off (server gone)" else "")
+        }
+        return XrayConfigBuilder.build(profile, CoreOptions(mtu = MTU), routes)
+    }
+
+    /**
+     * Apps with their own server, grouped by server. Empty when every app uses the main
+     * server, and before Android 10, which cannot tell Xray a connection's app.
+     */
+    private fun appRoutes(): List<AppRoute> {
+        val choices = store.appServers.value
+        if (choices.isEmpty() || Build.VERSION.SDK_INT < 29) return emptyList()
+        val uids = linkedMapOf<StoredServer?, MutableList<Int>>()
+        for ((pkg, choice) in choices) {
+            val uid = runCatching { packageManager.getApplicationInfo(pkg, 0).uid }.getOrNull() ?: continue
+            uids.getOrPut(store.serverFor(choice)) { mutableListOf() } += uid
+        }
+        return uids.map { (server, list) -> AppRoute(list, server?.let { store.profileOf(it) }) }
+    }
+
+    /**
+     * Apps kept out of the interface: with Android's lockdown they then get no internet
+     * at all. That is how apps with their own server are cut off where per-app routing
+     * cannot work: under OpenVPN, or before Android 10.
+     */
+    private fun excludedApps(forOpenVpn: Boolean): Set<String> {
+        if (!forOpenVpn && Build.VERSION.SDK_INT >= 29) return emptySet()
+        if (!Policy.isLockdownActive(this)) return emptySet()
+        return store.appServers.value.keys
     }
 
     /** Tested and working first, then never tested, then failed. */
@@ -624,8 +664,9 @@ class TunnelVpnService : VpnService() {
     @Synchronized
     private fun ensureTun(fresh: Boolean = false): Int? {
         val current = tun
-        if (current != null && !fresh) return current.fd
-        val builder = baseBuilder(MTU)
+        val excluded = excludedApps(forOpenVpn = false)
+        if (current != null && !fresh && excluded == tunExcluded) return current.fd
+        val builder = baseBuilder(MTU, excluded)
             .addAddress("172.19.0.1", 30)
             .addRoute("0.0.0.0", 0)
             // IPv6 is routed into the tunnel too, so it can never bypass it.
@@ -634,6 +675,7 @@ class TunnelVpnService : VpnService() {
             .addDnsServer("1.1.1.1")
         val created = establish(builder) ?: return current?.fd
         tun = created
+        tunExcluded = excluded
         openVpnTun = null
         current?.let { runCatching { it.close() } }
         return created.fd
@@ -647,9 +689,10 @@ class TunnelVpnService : VpnService() {
     @Synchronized
     private fun establishOpenVpnTun(request: OpenVpnTun): ParcelFileDescriptor? {
         val current = tun
+        val excluded = excludedApps(forOpenVpn = true)
         // A reconnect asking for the same interface gets the one we have.
-        if (current != null && openVpnTun == request) return current
-        val builder = baseBuilder(request.mtu.coerceIn(576, 9000))
+        if (current != null && openVpnTun == request && excluded == tunExcluded) return current
+        val builder = baseBuilder(request.mtu.coerceIn(576, 9000), excluded)
             .addAddress(request.ipv4 ?: "172.19.0.1", if (request.ipv4 != null) request.ipv4Prefix.coerceIn(1, 32) else 30)
             .addRoute("0.0.0.0", 0)
             .addAddress(request.ipv6 ?: "fdfe:dcba:9876::1", if (request.ipv6 != null) request.ipv6Prefix.coerceIn(1, 128) else 126)
@@ -658,12 +701,13 @@ class TunnelVpnService : VpnService() {
         request.domain?.let { domain -> runCatching { builder.addSearchDomain(domain) } }
         val created = establish(builder) ?: return null
         tun = created
+        tunExcluded = excluded
         openVpnTun = request
         current?.let { runCatching { it.close() } }
         return created
     }
 
-    private fun baseBuilder(mtu: Int): Builder {
+    private fun baseBuilder(mtu: Int, excluded: Set<String>): Builder {
         val builder = Builder()
             .setSession(getString(R.string.app_name))
             .setMtu(mtu)
@@ -672,6 +716,7 @@ class TunnelVpnService : VpnService() {
             )
         // The engines' own connections to the server must not loop back into the tunnel.
         runCatching { builder.addDisallowedApplication(packageName) }
+        excluded.forEach { pkg -> runCatching { builder.addDisallowedApplication(pkg) } }
         if (Build.VERSION.SDK_INT >= 29) builder.setMetered(false)
         return builder
     }
@@ -687,6 +732,7 @@ class TunnelVpnService : VpnService() {
     private fun closeTun() {
         runCatching { tun?.close() }
         tun = null
+        tunExcluded = emptySet()
         openVpnTun = null
     }
 

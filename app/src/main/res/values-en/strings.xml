@@ -160,6 +160,14 @@
     <string name="apps_options">Options</string>
     <string name="apps_never_pause">Always openable</string>
     <string name="apps_never_pause_desc">This app is never paused, so you can open it while disconnected. It still has no internet until you connect.</string>
+    <string name="apps_server">Server for this app</string>
+    <string name="apps_server_main">Main server (default)</string>
+    <string name="apps_server_desc">%1$s reaches the internet only through the server you pick here. If that server is down, it has no internet and never falls back to the main server.</string>
+    <string name="apps_server_badge">Server: %1$s</string>
+    <string name="apps_server_missing">its server was deleted, no internet</string>
+    <string name="apps_server_openvpn">The main server is OpenVPN right now: while it is, apps with their own server have no internet.</string>
+    <string name="apps_server_old_android">This needs Android 10 or newer; on this phone apps with their own server have no internet.</string>
+    <string name="apps_server_none">This needs another V2Ray server (OpenVPN servers and whole JSON configs cannot be used).</string>
     <string name="apps_never_pause_badge">always openable</string>
     <string name="apps_remove_from_space">Remove from secure space</string>
     <string name="dialog_close">Close</string>

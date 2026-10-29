@@ -4,9 +4,10 @@
 #
 #   e2e/servers.sh setup                 install and configure both servers, start them
 #   e2e/servers.sh start|stop xray       VLESS (Xray) on port 10086, no TLS
+#   e2e/servers.sh start|stop xray-b     a second one on port 10087 (an app's own server)
 #   e2e/servers.sh start|stop openvpn    OpenVPN on UDP 1194, login e2e / $OVPN_PASSWORD
 #
-# Client configs end up in e2e/out: xray.link and client.ovpn.
+# Client configs end up in e2e/out: xray.link, xray-b.link and client.ovpn.
 set -euo pipefail
 
 OUT=$(cd "$(dirname "$0")" && pwd)/out
@@ -24,16 +25,36 @@ quiet() { # <title> <command...>
     fi
 }
 
-start_xray() {
-    nohup "$OUT/xray" run -c "$OUT/xray-server.json" >>"$OUT/xray.log" 2>&1 &
-    echo $! >"$OUT/xray.pid"
+start_xray() { # [name: xray | xray-b]
+    local name=${1:-xray}
+    nohup "$OUT/xray" run -c "$OUT/$name-server.json" >>"$OUT/$name.log" 2>&1 &
+    echo $! >"$OUT/$name.pid"
     sleep 1
-    kill -0 "$(cat "$OUT/xray.pid")" || { echo "::error title=Xray server::did not start: $(tail -5 "$OUT/xray.log")"; exit 1; }
+    kill -0 "$(cat "$OUT/$name.pid")" || { echo "::error title=Xray server $name::did not start: $(tail -5 "$OUT/$name.log")"; exit 1; }
 }
 
-stop_xray() {
-    [ -f "$OUT/xray.pid" ] && kill "$(cat "$OUT/xray.pid")" 2>/dev/null || true
-    rm -f "$OUT/xray.pid"
+stop_xray() { # [name]
+    local name=${1:-xray}
+    [ -f "$OUT/$name.pid" ] && kill "$(cat "$OUT/$name.pid")" 2>/dev/null || true
+    rm -f "$OUT/$name.pid"
+}
+
+# A VLESS server without TLS: <name> <port>. Writes <name>-server.json and <name>.link.
+xray_server() {
+    local name=$1 port=$2 uuid
+    uuid=$(cat /proc/sys/kernel/random/uuid)
+    cat >"$OUT/$name-server.json" <<EOF
+{
+  "log": { "loglevel": "warning", "access": "$OUT/$name-access.log" },
+  "inbounds": [{
+    "listen": "0.0.0.0", "port": $port, "protocol": "vless",
+    "settings": { "clients": [{ "id": "$uuid" }], "decryption": "none" },
+    "streamSettings": { "network": "raw" }
+  }],
+  "outbounds": [{ "protocol": "freedom" }]
+}
+EOF
+    echo "vless://$uuid@10.0.2.2:$port?encryption=none&type=tcp&security=none#e2e-$name" >"$OUT/$name.link"
 }
 
 start_openvpn() {
@@ -51,21 +72,10 @@ setup() {
     # ---- Xray: the same core version as the app, built from source (Go verifies the module checksums).
     GOBIN="$OUT/gobin" quiet "Xray build" go install "$XRAY_SERVER_MODULE"
     cp "$OUT/gobin/main" "$OUT/xray"
-    local uuid
-    uuid=$(cat /proc/sys/kernel/random/uuid)
-    cat >"$OUT/xray-server.json" <<EOF
-{
-  "log": { "loglevel": "warning", "access": "$OUT/xray-access.log" },
-  "inbounds": [{
-    "listen": "0.0.0.0", "port": 10086, "protocol": "vless",
-    "settings": { "clients": [{ "id": "$uuid" }], "decryption": "none" },
-    "streamSettings": { "network": "raw" }
-  }],
-  "outbounds": [{ "protocol": "freedom" }]
-}
-EOF
-    echo "vless://$uuid@10.0.2.2:10086?encryption=none&type=tcp&security=none#e2e-xray" >"$OUT/xray.link"
-    start_xray
+    xray_server xray 10086
+    xray_server xray-b 10087
+    start_xray xray
+    start_xray xray-b
 
     # ---- OpenVPN: a throw-away CA, login checked by a script, traffic NATed to the internet.
     quiet "apt-get update" sudo apt-get update -qq
@@ -123,14 +133,16 @@ EOF
         echo "</ca>"
     } >"$OUT/client.ovpn"
     start_openvpn
-    echo "::notice title=Test servers::Xray on 10086/tcp and OpenVPN on 1194/udp are running"
+    echo "::notice title=Test servers::Xray on 10086/tcp and 10087/tcp, OpenVPN on 1194/udp are running"
 }
 
 case "${1:-} ${2:-}" in
     "setup ") setup ;;
-    "start xray") start_xray ;;
-    "stop xray") stop_xray ;;
+    "start xray") start_xray xray ;;
+    "stop xray") stop_xray xray ;;
+    "start xray-b") start_xray xray-b ;;
+    "stop xray-b") stop_xray xray-b ;;
     "start openvpn") start_openvpn ;;
     "stop openvpn") stop_openvpn ;;
-    *) echo "usage: $0 setup | start|stop xray|openvpn" >&2; exit 2 ;;
+    *) echo "usage: $0 setup | start|stop xray|xray-b|openvpn" >&2; exit 2 ;;
 esac
