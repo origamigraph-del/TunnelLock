@@ -297,6 +297,22 @@ from=$(applines)
 if wait_phase CONNECTED "$from" 180; then pass "OpenVPN reconnect" "connected again by itself"; else fail "OpenVPN reconnect" "no CONNECTED within 180 s"; fi
 m=$(mark); sleep 20; check_online "OpenVPN online again" "$m"
 
+# ---- 7b. OpenVPN filtered mid-handshake, the way DPI does it: a clear message ----------
+
+m=$(mark); from=$(applines)
+# The server's first small packet gets through, its certificate (large packets) does not.
+FILTER=(OUTPUT -p udp --sport 1194 -m length --length 400:65535 -j DROP)
+sudo iptables -I "${FILTER[@]}"
+start_with ovpn
+sleep 40
+if applog | tail -n +"$((from + 1))" | grep -q "the server answered, then the handshake got stuck"; then
+    pass "OpenVPN filtered" "TunnelLock says the handshake got stuck after the server answered"
+else
+    fail "OpenVPN filtered" "no stuck-handshake message: $(applog | tail -n +"$((from + 1))" | grep OpenVPN | tail -4 | cut -c1-150 | tr '\n' ' ')"
+fi
+check_blocked "OpenVPN filtered blocks" "$m"
+sudo iptables -D "${FILTER[@]}"
+
 # ---- 8. wrong OpenVPN password: a clear error, no endless retries ----------------------
 
 m=$(mark); from=$(applines)

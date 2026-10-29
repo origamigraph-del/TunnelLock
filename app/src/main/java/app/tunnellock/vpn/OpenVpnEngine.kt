@@ -5,6 +5,7 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.os.ParcelFileDescriptor
+import android.os.SystemClock
 import android.system.Os
 import app.tunnellock.BuildConfig
 import app.tunnellock.core.openvpn.OpenVpnConfig
@@ -65,10 +66,18 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
 
         /** OpenVPN ended and will not come back by itself. */
         data class Stopped(val reason: String, val loginRejected: Boolean = false) : Event
+
+        /**
+         * Still not connected after [STALL_MS]. [serverAnswered]: the server's first packet
+         * arrived and then the handshake got stuck, the usual sign of OpenVPN being filtered;
+         * otherwise nothing came back at all. Sent again if the server answers later.
+         */
+        data class Stalled(val serverAnswered: Boolean) : Event
     }
 
     private companion object {
         const val TAG = "OpenVPN"
+        const val STALL_MS = 20_000L
         val NEED_OK = Regex("""^>NEED-OK:Need '([^']+)' confirmation(?: MSG:(.*))?$""")
         val PASSWORD_NEED = Regex("""^>PASSWORD:Need '([^']+)' (username/password|password)""")
         val TIMESTAMP = Regex("""^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d """)
@@ -91,6 +100,13 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
         /** Stopped on purpose or exited: nothing from it reaches the session any more. */
         @Volatile var ended = false
         @Volatile var connected = false
+
+        /** Since when it has been trying to connect (elapsedRealtime), and whether the server answered meanwhile. */
+        @Volatile var waitingSince = SystemClock.elapsedRealtime()
+        @Volatile var serverAnswered = false
+
+        /** What the last [Event.Stalled] said, null if none since [waitingSince]. */
+        var stallReported: Boolean? = null
 
         /** The server refused the login since the last successful connection. */
         @Volatile var loginRejected = false
@@ -167,9 +183,10 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
         val process = requireNotNull(run.process)
         synchronized(lock) { current = run }
         AppLog.i(TAG, "started (run ${run.id})")
-        thread(name = "openvpn-output", isDaemon = true) { readOutput(process) }
+        thread(name = "openvpn-output", isDaemon = true) { readOutput(run, process) }
         run.managementThread = thread(name = "openvpn-management", isDaemon = true) { manage(run) }
         thread(name = "openvpn-exit", isDaemon = true) { watchExit(run, process) }
+        thread(name = "openvpn-stall", isDaemon = true) { watchStall(run) }
         if (shutDown) {
             stop()
             throw IOException("TunnelLock is stopping")
@@ -296,6 +313,9 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
             }
             "RECONNECTING" -> if (run.connected) {
                 run.connected = false
+                run.waitingSince = SystemClock.elapsedRealtime()
+                run.serverAnswered = false
+                run.stallReported = null
                 emit(run, Event.Reconnecting(detail))
             }
             "EXITING" -> if (detail.isNotEmpty()) run.problem = detail
@@ -407,11 +427,34 @@ class OpenVpnEngine(private val context: Context, private val host: Host) {
 
     // ---- process ----------------------------------------------------------------
 
-    private fun readOutput(process: Process) {
+    private fun readOutput(run: Run, process: Process) {
         runCatching {
             process.inputStream.bufferedReader().forEachLine {
+                // The server's first packet (TCP or UDP): it is there and speaks OpenVPN.
+                if ("TLS: Initial packet from" in it) run.serverAnswered = true
                 AppLog.i(TAG, it.replace(TIMESTAMP, "").replace(USERNAME_ECHO, "$1[...]'"))
             }
+        }
+    }
+
+    /** Tells the session when connecting takes long, and why it probably does. */
+    private fun watchStall(run: Run) {
+        while (!run.ended) {
+            runCatching { Thread.sleep(2_000) }
+            if (run.ended || run.connected) continue
+            if (SystemClock.elapsedRealtime() - run.waitingSince < STALL_MS) continue
+            val answered = run.serverAnswered
+            if (run.stallReported == answered) continue
+            run.stallReported = answered
+            AppLog.w(
+                TAG,
+                if (answered) {
+                    "not connected after ${STALL_MS / 1000} s: the server answered, then the handshake got stuck (typical of OpenVPN being filtered)"
+                } else {
+                    "not connected after ${STALL_MS / 1000} s: no answer from the server (address, port or key wrong, server down, or blocked)"
+                },
+            )
+            emit(run, Event.Stalled(answered))
         }
     }
 

@@ -178,6 +178,8 @@
     <string name="error_openvpn_start">OpenVPN did not start: %1$s</string>
     <string name="error_openvpn_login">The OpenVPN server rejected the username or password. Edit the login in Servers.</string>
     <string name="error_openvpn_stopped">OpenVPN stopped: %1$s</string>
+    <string name="error_openvpn_stuck">The server answered, but the connection got stuck halfway. This usually means your internet filters OpenVPN; try a V2Ray server.</string>
+    <string name="error_openvpn_no_answer">The OpenVPN server does not answer at all: the config\'s address, port or key is wrong, the server is down, or it is blocked.</string>
     <string name="servers_ovpn_file">OpenVPN file</string>
     <string name="ovpn_login_title">OpenVPN login</string>
     <string name="ovpn_login_hint">The username and password are stored only in this app, inside the secure space.</string>
