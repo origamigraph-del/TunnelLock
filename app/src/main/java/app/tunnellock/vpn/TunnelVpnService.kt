@@ -494,6 +494,8 @@ class TunnelVpnService : VpnService() {
         val connectTimeout = (30_000L + 30_000L * remotes).coerceAtMost(OPENVPN_MAX_CONNECT_TIMEOUT_MS)
         var everConnected = false
         var backoff = 2_000L
+        // Why connecting takes long, once OpenVPN can tell: shown while it keeps trying.
+        var stallHint: String? = null
         fun pauseNow() = pauseOnFailure && !everConnected
         while (true) {
             val runId = try {
@@ -512,7 +514,7 @@ class TunnelVpnService : VpnService() {
                 if (received == null) {
                     AppLog.w(TAG, "OpenVPN did not connect in time")
                     openVpn.stop()
-                    enterGuard(getString(R.string.error_server_unreachable), pauseNow())
+                    enterGuard(stallHint ?: getString(R.string.error_server_unreachable), pauseNow())
                     return
                 }
                 val (id, event) = received
@@ -522,7 +524,13 @@ class TunnelVpnService : VpnService() {
                     OpenVpnEngine.Event.Connected -> {
                         everConnected = true
                         backoff = 2_000L
+                        stallHint = null
                         markConnected(server)
+                    }
+                    is OpenVpnEngine.Event.Stalled -> {
+                        val hint = getString(if (event.serverAnswered) R.string.error_openvpn_stuck else R.string.error_openvpn_no_answer)
+                        stallHint = hint
+                        setStatus { if (it.phase == Phase.CONNECTED) it else it.copy(error = hint) }
                     }
                     // Lost mid-use: OpenVPN holds the tunnel (no internet) while it reconnects.
                     is OpenVpnEngine.Event.Reconnecting -> markDropped(server.name)
