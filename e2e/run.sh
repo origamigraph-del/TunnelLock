@@ -280,7 +280,12 @@ fi
 
 # ---- 5b. TunnelProbe on its own server B; the main server A must never carry it --------
 
-ipify_after() { tail -n +"$(($2 + 1))" "$OUT/$1-access.log" 2>/dev/null | grep -c ipify || true; }
+# The probe's own traffic in a server's access log: STUN (UDP 19302, nothing else uses it)
+# and ipify by name or address (with own servers, sniffing only routes: servers get addresses).
+ipify_ips=$( { dig +short @1.1.1.1 api64.ipify.org A; dig +short @1.1.1.1 api64.ipify.org AAAA; } 2>/dev/null \
+    | grep -E '^[0-9a-fA-F:.]+$' | sed 's/\./\\./g' | paste -sd'|' -)
+PROBE_MARKS=":19302|ipify${ipify_ips:+|$ipify_ips}"
+probe_hits() { tail -n +"$(($2 + 1))" "$OUT/$1-access.log" 2>/dev/null | grep -cE "$PROBE_MARKS" || true; }
 lines_of() { wc -l <"$OUT/$1-access.log" 2>/dev/null || echo 0; }
 
 from=$(applines)
@@ -292,11 +297,11 @@ else
 fi
 a0=$(lines_of xray); b0=$(lines_of xray-b)
 m=$(mark); sleep 25; check_online "Own server online" "$m"
-a=$(ipify_after xray "$a0"); b=$(ipify_after xray-b "$b0")
+a=$(probe_hits xray "$a0"); b=$(probe_hits xray-b "$b0")
 if [ "$b" -gt 0 ] && [ "$a" -eq 0 ]; then
-    pass "Own server only" "the probe's requests went to server B ($b), none to the main server"
+    pass "Own server only" "server B carried $b of the probe's connections (HTTPS and UDP), the main server none"
 else
-    fail "Own server only" "server B carried $b of the probe's requests, the main server $a"
+    fail "Own server only" "server B carried $b of the probe's connections, the main server $a: $(tail -n +"$((a0 + 1))" "$OUT/xray-access.log" | grep -E "$PROBE_MARKS" | head -3 | cut -c1-160 | tr '\n' ' ')"
 fi
 
 # B goes down: the probe gets nothing (never the main server), the main connection stays.
@@ -304,8 +309,8 @@ m=$(mark); from=$(applines); a0=$(lines_of xray)
 "$ROOT/e2e/servers.sh" stop xray-b
 sleep 40
 check_blocked "Own server down" "$m"
-a=$(ipify_after xray "$a0")
-if [ "$a" -eq 0 ]; then pass "No fallback" "nothing of the probe went to the main server while B was down"; else fail "No fallback" "$a probe requests went to the main server"; fi
+a=$(probe_hits xray "$a0")
+if [ "$a" -eq 0 ]; then pass "No fallback" "nothing of the probe went to the main server while B was down"; else fail "No fallback" "$a probe connections went to the main server"; fi
 if applog | tail -n +"$((from + 1))" | grep -q -- "-> RECONNECTING"; then
     fail "Main server unaffected" "TunnelLock dropped the main connection"
 else

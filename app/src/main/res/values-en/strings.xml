@@ -186,6 +186,7 @@
     <string name="error_openvpn_start">OpenVPN did not start: %1$s</string>
     <string name="error_openvpn_login">The OpenVPN server rejected the username or password. Edit the login in Servers.</string>
     <string name="error_openvpn_stopped">OpenVPN stopped: %1$s</string>
+    <string name="error_own_server_unprotected">Android\'s VPN lockdown is off, so apps with their own server would not be protected with this main server. Not connected; tap Re-apply secure space rules in Settings.</string>
     <string name="error_openvpn_stuck">The server answered, but the connection got stuck halfway. This usually means your internet filters OpenVPN; try a V2Ray server.</string>
     <string name="error_openvpn_no_answer">The OpenVPN server does not answer at all: the config\'s address, port or key is wrong, the server is down, or it is blocked.</string>
     <string name="servers_ovpn_file">OpenVPN file</string>
