@@ -132,7 +132,7 @@ class TunnelVpnService : VpnService() {
     @Volatile private var networkKnown = false
     private var lastSubscriptionCheck = 0L
 
-    /** Apps the current interface leaves out (see [excludedApps]). */
+    /** Apps the current interface leaves out: apps with their own server that cannot be routed. */
     private var tunExcluded: Set<String> = emptySet()
 
     /** What the current interface was built for, when OpenVPN asked for it; null for TunnelLock's own. */
@@ -179,7 +179,9 @@ class TunnelVpnService : VpnService() {
             // An update of an app that is in use is left alone.
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
             val pkg = intent.data?.schemeSpecificPart ?: return
-            AppGate.closeNewApp(context, pkg)
+            // Reinstalled, an app gets a new UID: its own-server rule must follow it.
+            if (pkg in store.appServers.value && TunnelState.status.value.phase.isActive) commands.trySend(Command.Connect)
+            if (intent.action == Intent.ACTION_PACKAGE_ADDED) AppGate.closeNewApp(context, pkg)
         }
     }
 
@@ -207,7 +209,11 @@ class TunnelVpnService : VpnService() {
         ContextCompat.registerReceiver(
             this,
             packageReceiver,
-            IntentFilter(Intent.ACTION_PACKAGE_ADDED).apply { addDataScheme("package") },
+            IntentFilter().apply {
+                addAction(Intent.ACTION_PACKAGE_ADDED)
+                addAction(Intent.ACTION_PACKAGE_REMOVED)
+                addDataScheme("package")
+            },
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
         runCatching {
@@ -322,6 +328,14 @@ class TunnelVpnService : VpnService() {
             enterGuard(getString(R.string.error_no_server), pauseOnFailure)
             return
         }
+        // Apps with their own server that this main server cannot route are left out of the
+        // interface, which only cuts them off if Android's lockdown is on: otherwise refuse.
+        val cutOff = if (routesPossible(profile)) emptySet() else store.appServers.value.keys
+        if (cutOff.isNotEmpty() && !Policy.isLockdownActive(this)) {
+            AppLog.w(TAG, "${cutOff.size} apps with their own server cannot be routed and lockdown is off: not connecting")
+            enterGuard(getString(R.string.error_own_server_unprotected), pauseOnFailure)
+            return
+        }
         if (profile.protocol == Protocol.OPENVPN) {
             if (ensureTun() == null) {
                 setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
@@ -331,7 +345,7 @@ class TunnelVpnService : VpnService() {
             return
         }
         // Xray reads from TunnelLock's own interface, not one built for an OpenVPN server.
-        val fd = ensureTun(fresh = openVpnTun != null)
+        val fd = ensureTun(fresh = openVpnTun != null, excluded = cutOff)
         if (fd == null) {
             setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
             return
@@ -464,7 +478,7 @@ class TunnelVpnService : VpnService() {
 
     /** The tunnel config for a main server, with the apps that have their own server. */
     private fun xrayConfig(profile: ServerProfile, log: Boolean = false): String {
-        val routes = appRoutes()
+        val routes = if (routesPossible(profile)) appRoutes() else emptyList()
         if (log && routes.isNotEmpty()) {
             val cutOff = routes.filter { route -> route.profile?.let { XrayConfigBuilder.canRouteApps(it) } != true }.sumOf { it.uids.size }
             AppLog.i(TAG, "own servers: ${routes.sumOf { it.uids.size }} apps on ${routes.size} servers" + if (cutOff > 0) ", $cutOff cut off (server gone)" else "")
@@ -473,12 +487,17 @@ class TunnelVpnService : VpnService() {
     }
 
     /**
-     * Apps with their own server, grouped by server. Empty when every app uses the main
-     * server, and before Android 10, which cannot tell Xray a connection's app.
+     * Whether apps can be sent to their own servers while [main] is the main server: it
+     * must run on Xray without FakeDNS, and Android 10 or newer must tell Xray each
+     * connection's app. Otherwise those apps are cut off.
      */
+    private fun routesPossible(main: ServerProfile): Boolean =
+        Build.VERSION.SDK_INT >= 29 && XrayConfigBuilder.canCarryAppRoutes(main)
+
+    /** Apps with their own server, grouped by server. Empty when every app uses the main server. */
     private fun appRoutes(): List<AppRoute> {
         val choices = store.appServers.value
-        if (choices.isEmpty() || Build.VERSION.SDK_INT < 29) return emptyList()
+        if (choices.isEmpty()) return emptyList()
         val uids = linkedMapOf<StoredServer?, MutableList<Int>>()
         for ((pkg, choice) in choices) {
             val uid = runCatching { packageManager.getApplicationInfo(pkg, 0).uid }.getOrNull() ?: continue
@@ -487,16 +506,6 @@ class TunnelVpnService : VpnService() {
         return uids.map { (server, list) -> AppRoute(list, server?.let { store.profileOf(it) }) }
     }
 
-    /**
-     * Apps kept out of the interface: with Android's lockdown they then get no internet
-     * at all. That is how apps with their own server are cut off where per-app routing
-     * cannot work: under OpenVPN, or before Android 10.
-     */
-    private fun excludedApps(forOpenVpn: Boolean): Set<String> {
-        if (!forOpenVpn && Build.VERSION.SDK_INT >= 29) return emptySet()
-        if (!Policy.isLockdownActive(this)) return emptySet()
-        return store.appServers.value.keys
-    }
 
     /** Tested and working first, then never tested, then failed. */
     private fun latencyRank(latencyMs: Long?): Int = when {
@@ -662,9 +671,8 @@ class TunnelVpnService : VpnService() {
      * gets out in between.
      */
     @Synchronized
-    private fun ensureTun(fresh: Boolean = false): Int? {
+    private fun ensureTun(fresh: Boolean = false, excluded: Set<String> = emptySet()): Int? {
         val current = tun
-        val excluded = excludedApps(forOpenVpn = false)
         if (current != null && !fresh && excluded == tunExcluded) return current.fd
         val builder = baseBuilder(MTU, excluded)
             .addAddress("172.19.0.1", 30)
@@ -689,7 +697,8 @@ class TunnelVpnService : VpnService() {
     @Synchronized
     private fun establishOpenVpnTun(request: OpenVpnTun): ParcelFileDescriptor? {
         val current = tun
-        val excluded = excludedApps(forOpenVpn = true)
+        // OpenVPN cannot send apps to their own servers: they are left out, so lockdown cuts them off.
+        val excluded = store.appServers.value.keys
         // A reconnect asking for the same interface gets the one we have.
         if (current != null && openVpnTun == request && excluded == tunExcluded) return current
         val builder = baseBuilder(request.mtu.coerceIn(576, 9000), excluded)

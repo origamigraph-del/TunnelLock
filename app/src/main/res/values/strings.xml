@@ -197,6 +197,7 @@
     <string name="error_openvpn_start">OpenVPN اجرا نشد: %1$s</string>
     <string name="error_openvpn_login">سرور OpenVPN نام کاربری یا رمز را نپذیرفت. از بخش سرورها «ورود» را ویرایش کنید.</string>
     <string name="error_openvpn_stopped">OpenVPN متوقف شد: %1$s</string>
+    <string name="error_own_server_unprotected">قفل VPN اندروید (lockdown) خاموش است، پس اپ‌هایی که سرور جدا دارند با این سرور اصلی محافظت نمی‌شوند. وصل نشد؛ در تنظیمات «اعمال دوباره قوانین فضای امن» را بزنید.</string>
     <string name="error_openvpn_stuck">سرور جواب داد ولی اتصال وسط راه گیر کرد. معمولاً یعنی اینترنت شما OpenVPN را فیلتر می‌کند؛ سرور V2Ray را امتحان کنید.</string>
     <string name="error_openvpn_no_answer">سرور OpenVPN هیچ جوابی نمی‌دهد: آدرس، پورت یا کلید کانفیگ اشتباه است، سرور خاموش است یا مسدود شده.</string>
     <string name="servers_ovpn_file">فایل OpenVPN</string>
