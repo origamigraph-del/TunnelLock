@@ -72,7 +72,7 @@ object XrayCore {
         private var lastWarning = 0L
 
         override fun findProcessByConnection(network: String?, srcIP: String?, srcPort: Long, destIP: String?, destPort: Long): Long {
-            if (Build.VERSION.SDK_INT < 29) return -1
+            if (Build.VERSION.SDK_INT < 29 || srcIP == null || destIP == null) return -1
             val uid = runCatching {
                 val protocol = if (network == "udp") OsConstants.IPPROTO_UDP else OsConstants.IPPROTO_TCP
                 connectivity.getConnectionOwnerUid(
