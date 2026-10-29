@@ -265,8 +265,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val pm = app.packageManager
                 val installed = Policy.protectedApps(app)
                 Policy.pruneNeverPause(app, installed.map { it.packageName })
+                store.pruneAppServers(installed.map { it.packageName })
                 val neverPause = Policy.neverPausePackages(app)
+                val ownServers = store.appServers.value
                 installed.map { info ->
+                    val own = ownServers[info.packageName]
                     ProtectedApp(
                         packageName = info.packageName,
                         label = info.loadLabel(pm).toString(),
@@ -274,6 +277,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         system = Policy.isAddedSystemApp(app, info.packageName),
                         paused = Policy.isSuspended(app, info.packageName),
                         neverPause = info.packageName in neverPause,
+                        ownServer = own?.let { store.serverFor(it)?.name ?: it.name },
+                        ownServerMissing = own != null && store.serverFor(own) == null,
                     )
                 }.sortedBy { it.label.lowercase() }
             }
@@ -286,6 +291,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             AppLog.i("Apps", "never-pause ${if (value) "on" else "off"} for one app")
             refreshProtectedApps()
         }
+    }
+
+    /** Servers an app can have as its own: plain V2Ray servers (OpenVPN and whole JSON configs cannot). */
+    fun appServerChoices(): List<StoredServer> =
+        store.servers.value.filter { server -> store.profileOf(server)?.let { XrayConfigBuilder.canRouteApps(it) } == true }
+
+    /** While the main server is OpenVPN, apps with their own server are cut off. */
+    fun mainIsOpenVpn(): Boolean = store.selectedProfile()?.protocol == Protocol.OPENVPN
+
+    fun setAppServer(item: ProtectedApp, server: StoredServer?) {
+        store.setAppServer(item.packageName, server)
+        AppLog.i("Apps", if (server == null) "one app back on the main server" else "one app on its own server")
+        refreshProtectedApps()
+        // A running connection picks up the new routes by reconnecting.
+        if (status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
     }
 
     fun removeApp(context: Context, item: ProtectedApp) {
@@ -345,4 +365,8 @@ data class ProtectedApp(
     val paused: Boolean,
     /** Can be opened while disconnected (still no internet). */
     val neverPause: Boolean,
+    /** The name of the app's own server; null = the main server. */
+    val ownServer: String? = null,
+    /** Its own server was deleted: it has no internet until another one is chosen. */
+    val ownServerMissing: Boolean = false,
 )

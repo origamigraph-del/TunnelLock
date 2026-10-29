@@ -35,6 +35,9 @@ data class Subscription(
     val usage: SubscriptionUsage? = null,
 )
 
+/** An app's own server, by link (ids change when a subscription is refreshed) and by name as a fallback. */
+data class AppServer(val link: String, val name: String)
+
 data class SubscriptionUsage(
     val usedBytes: Long,
     /** 0 = unlimited. */
@@ -70,6 +73,13 @@ class AppStore(context: Context) {
     /** When the server stops answering, switch to the fastest other server that works. Off by default. */
     private val _failover = MutableStateFlow(prefs.getBoolean(KEY_FAILOVER, false))
     val failover: StateFlow<Boolean> = _failover
+
+    /**
+     * Apps that use their own server instead of the main one (package -> server).
+     * Empty by default: every app uses the main server.
+     */
+    private val _appServers = MutableStateFlow(readAppServers())
+    val appServers: StateFlow<Map<String, AppServer>> = _appServers
 
     /** Refresh subscriptions older than 12 hours in the background. Off by default. */
     private val _autoUpdateSubscriptions = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE_SUBSCRIPTIONS, false))
@@ -190,6 +200,24 @@ class AppStore(context: Context) {
         saveServers(_servers.value.filter { it.subscriptionId != id })
     }
 
+    /** Gives [pkg] its own server, or back to the main server with null. */
+    @Synchronized
+    fun setAppServer(pkg: String, server: StoredServer?) {
+        val updated = if (server == null) _appServers.value - pkg else _appServers.value + (pkg to AppServer(server.link, server.name))
+        saveAppServers(updated)
+    }
+
+    /** Forgets apps that are no longer in the secure space. */
+    @Synchronized
+    fun pruneAppServers(installed: Collection<String>) {
+        val kept = _appServers.value.filterKeys { it in installed }
+        if (kept.size != _appServers.value.size) saveAppServers(kept)
+    }
+
+    /** The server an app was given, found again after a subscription refresh by name. Null if it is gone. */
+    fun serverFor(choice: AppServer): StoredServer? =
+        _servers.value.find { it.link == choice.link } ?: _servers.value.find { it.name == choice.name }
+
     fun selectedServer(): StoredServer? = _servers.value.find { it.id == _selectedId.value }
 
     fun selectedProfile(): ServerProfile? = selectedServer()?.let { profileOf(it) }
@@ -246,6 +274,21 @@ class AppStore(context: Context) {
         }
     }
 
+    private fun saveAppServers(map: Map<String, AppServer>) {
+        _appServers.value = map
+        val o = JSONObject()
+        map.forEach { (pkg, server) -> o.put(pkg, JSONObject().put("link", server.link).put("name", server.name)) }
+        prefs.edit().putString(KEY_APP_SERVERS, o.toString()).apply()
+    }
+
+    private fun readAppServers(): Map<String, AppServer> {
+        val o = runCatching { JSONObject(prefs.getString(KEY_APP_SERVERS, "{}") ?: "{}") }.getOrElse { JSONObject() }
+        return o.keys().asSequence().mapNotNull { pkg ->
+            val v = o.optJSONObject(pkg) ?: return@mapNotNull null
+            pkg to AppServer(v.optString("link"), v.optString("name"))
+        }.toMap()
+    }
+
     private fun saveSubscriptions(list: List<Subscription>) {
         _subscriptions.value = list
         val array = JSONArray()
@@ -280,5 +323,6 @@ class AppStore(context: Context) {
         const val KEY_PAUSE_WHEN_DISCONNECTED = "pauseWhenDisconnected"
         const val KEY_FAILOVER = "failover"
         const val KEY_AUTO_UPDATE_SUBSCRIPTIONS = "autoUpdateSubscriptions"
+        const val KEY_APP_SERVERS = "appServers"
     }
 }

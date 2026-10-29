@@ -1,8 +1,10 @@
 package app.tunnellock.core
 
 import app.tunnellock.core.parser.LinkParser
+import app.tunnellock.core.xray.AppRoute
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -117,5 +119,72 @@ class XrayConfigBuilderTest {
     fun testConfigHasNoInbounds() {
         val c = build("vless://u@a.example:443#a", CoreOptions(useTun = false))
         assertEquals(0, c.getJSONArray("inbounds").length())
+    }
+
+    private fun JSONArray.objects() = (0 until length()).map { getJSONObject(it) }
+
+    @Test
+    fun withoutAppRoutesNothingChanges() {
+        val profile = LinkParser.parse("vless://u@a.example:443#a")
+        assertEquals(XrayConfigBuilder.build(profile), XrayConfigBuilder.build(profile, appRoutes = emptyList()))
+    }
+
+    @Test
+    fun appsGoOnlyThroughTheirOwnServer() {
+        val main = LinkParser.parse("vless://u@main.example:443#main")
+        val other = LinkParser.parse("vless://u@other.example:443#other")
+        val c = JSONObject(
+            XrayConfigBuilder.build(
+                main,
+                appRoutes = listOf(AppRoute(listOf(1010123, 1010124), other), AppRoute(listOf(1010200), null)),
+            ),
+        )
+        val outbounds = c.getJSONArray("outbounds").objects()
+        // The main server stays first: everything without a rule goes there.
+        assertEquals("proxy", outbounds.first().getString("tag"))
+        val own = outbounds.single { it.getString("tag") == "tl-app-1" }
+        assertEquals("other.example", own.getJSONObject("settings").getString("address"))
+        assertTrue(outbounds.any { it.getString("tag") == "tl-block" && it.getString("protocol") == "blackhole" })
+
+        val rules = c.getJSONObject("routing").getJSONArray("rules").objects()
+        // App rules come before the DNS rule, so an app's DNS goes through its own server too.
+        assertEquals(listOf("1010123", "1010124"), rules[0].getJSONArray("process").let { a -> (0 until a.length()).map { a.getString(it) } })
+        assertEquals("tl-app-1", rules[0].getString("outboundTag"))
+        // A server that is gone cuts its apps off instead of using the main server.
+        assertEquals("1010200", rules[1].getJSONArray("process").getString(0))
+        assertEquals("tl-block", rules[1].getString("outboundTag"))
+        // Connections whose app is unknown are dropped (DNS aside).
+        assertEquals("-1", rules[2].getJSONArray("process").getString(0))
+        assertEquals("tl-block", rules[2].getString("outboundTag"))
+        assertFalse(rules[2].getString("port").split(',').any { "53" in it.split('-') })
+        assertEquals("dns-out", rules[3].getString("outboundTag"))
+        assertEquals(4, rules.size)
+    }
+
+    @Test
+    fun customMainConfigKeepsItsRulesAfterTheAppRules() {
+        val custom = """{"outbounds":[{"tag":"proxy","protocol":"vless","settings":{"vnext":[{"address":"x","port":1,"users":[{"id":"u"}]}]}}],
+            "routing":{"rules":[{"domain":["example.com"],"outboundTag":"proxy"}]}}"""
+        val c = JSONObject(
+            XrayConfigBuilder.build(
+                LinkParser.parse(custom),
+                appRoutes = listOf(AppRoute(listOf(1010123), LinkParser.parse("vless://u@other.example:443#o"))),
+            ),
+        )
+        val rules = c.getJSONObject("routing").getJSONArray("rules").objects()
+        assertEquals("tl-app-1", rules[0].getString("outboundTag"))
+        assertEquals("tl-block", rules[1].getString("outboundTag"))
+        assertEquals("example.com", rules[2].getJSONArray("domain").getString(0))
+    }
+
+    @Test
+    fun aWholeJsonConfigCannotBeAnAppsServer() {
+        val custom = LinkParser.parse("""{"outbounds":[{"tag":"proxy","protocol":"freedom"}]}""")
+        assertFalse(XrayConfigBuilder.canRouteApps(custom))
+        val c = JSONObject(
+            XrayConfigBuilder.build(LinkParser.parse("vless://u@a.example:443#a"), appRoutes = listOf(AppRoute(listOf(1010123), custom))),
+        )
+        assertEquals("tl-block", c.getJSONObject("routing").getJSONArray("rules").getJSONObject(0).getString("outboundTag"))
+        assertFalse(c.getJSONArray("outbounds").objects().any { it.getString("tag").startsWith("tl-app-") })
     }
 }

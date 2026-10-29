@@ -180,7 +180,7 @@ strict/          DeviceAdminReceiver، provisioning، lockdown، suspend
 
 ## ۱۳. ایده‌های آینده
 
-- هر اپ از سرور متفاوت (نیازمند تشخیص UID هر اتصال با `getConnectionOwnerUid` در اندروید ۱۰ به بالا)
+- ~~هر اپ از سرور متفاوت~~ ساخته شد (قانون `process` در Xray با UID هر اتصال از `getConnectionOwnerUid`)
 - زمان‌بندی (مثلاً فقط ساعات خاص)
 - آمار مصرف هر اپ
 - زنجیره (OpenVPN از داخل V2Ray)
