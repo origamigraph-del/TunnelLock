@@ -64,7 +64,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.strict.PhoneApp
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
@@ -196,7 +198,10 @@ private fun PersonalHub(space: UserHandle) {
     }
     LaunchedEffect(reload) {
         apps = withContext(Dispatchers.IO) { PhoneApps.list(context) }
+        // Updates are installed from here: check when opened (at most every 10 minutes).
+        UpdateChecker.checkIfDue(context, notify = false, maxAgeMs = 10 * 60_000L)
     }
+    val update by UpdateChecker.info.collectAsStateWithLifecycle()
     val sendFailed = stringResource(R.string.hub_send_failed)
     val tileAdded = stringResource(R.string.hub_tile_added)
     var tileOn by remember { mutableStateOf(ToggleTileService.isEnabled(context)) }
@@ -254,6 +259,9 @@ private fun PersonalHub(space: UserHandle) {
                         ) { Text(stringResource(R.string.setup_open)) }
                     }
                 }
+            }
+            update?.takeIf { it.status.pending.isNotEmpty() || it.status.upstream.isNotEmpty() }?.let { info ->
+                item { UpdateCard(info, inSecureSpace = false) }
             }
             // Copies left outside have no protection: one wrong tap and the real IP is out.
             val outside = apps.orEmpty().filter { it.inSecureSpace && it.packageName != PhoneApps.PROBE_PACKAGE }

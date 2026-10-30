@@ -26,6 +26,7 @@ import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
 import app.tunnellock.data.AppStore
 import app.tunnellock.data.StoredServer
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.data.SubscriptionUpdater
 import app.tunnellock.strict.AppGate
 import app.tunnellock.strict.Policy
@@ -237,6 +238,14 @@ class TunnelVpnService : VpnService() {
             while (true) {
                 delay(BATTERY_SAMPLE_MS)
                 sampleBattery("battery")
+            }
+        }
+        // New versions: looked for every 12 hours (TunnelLock itself is outside the tunnel).
+        scope.launch {
+            delay(60_000)
+            while (true) {
+                UpdateChecker.checkIfDue(this@TunnelVpnService, notify = true)
+                delay(BATTERY_SAMPLE_MS)
             }
         }
     }

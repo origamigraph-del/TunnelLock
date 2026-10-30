@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: write
+  # The updates issue, where releases are announced to the apps.
+  issues: write
 
 env:
   # Xray core for Android, built by the AndroidLibXrayLite project (same core v2rayNG uses).
@@ -22,6 +24,8 @@ env:
   # SHA-256 of the certificate in signing/release.jks. Releases must carry exactly this
   # signature, otherwise they cannot update the installed app.
   RELEASE_CERT_SHA256: 5e5cb12b9e9aca85bc7c05843f794dac744ccb0c2b39b9f2eba8dfce6b739eed
+  # The issue the apps read new versions from (release/notes.json is posted there).
+  UPDATE_ISSUE: 2
 
 jobs:
   build:
@@ -149,3 +153,10 @@ jobs:
             --latest \
             --title "TunnelLock 0.1.${GITHUB_RUN_NUMBER}" \
             --notes "Build from ${GITHUB_SHA::7}. TunnelLock.apk is the app (installs as an update). TunnelProbe.apk is the leak-test tool."
+
+      # The apps learn about the new version (and how urgent it is) from the updates issue.
+      - name: Announce the update
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.signature.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/announce-update.sh

@@ -28,7 +28,10 @@ object SubscriptionUpdater {
         if (!claimed) return null
         return try {
             withContext(Dispatchers.IO) { runCatching { SubscriptionFetcher.fetch(sub.url) } }
-                .onSuccess { store.replaceSubscriptionServers(sub.id, it.report.servers, it.usage) }
+                .onSuccess {
+                    // Garbage lines ("other") are not servers; anything else is a link this version cannot read.
+                    store.replaceSubscriptionServers(sub.id, it.report.servers, it.usage, it.report.skipped - "other")
+                }
         } finally {
             _updating.update { it - sub.id }
         }

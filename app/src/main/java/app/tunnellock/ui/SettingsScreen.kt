@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.LocaleList
 import android.os.PowerManager
 import android.provider.Settings
+import android.text.format.DateUtils
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.BuildConfig
 import app.tunnellock.R
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.vpn.XrayCore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -51,6 +53,8 @@ fun SettingsScreen(vm: MainViewModel) {
     val xrayVersion by produceState("…") {
         value = withContext(Dispatchers.IO) { XrayCore.version(context) }
     }
+    val update by UpdateChecker.info.collectAsStateWithLifecycle()
+    var notifyUpdates by remember { mutableStateOf(UpdateChecker.notificationsOn(context)) }
     var showLogs by remember { mutableStateOf(false) }
     if (showLogs) LogsDialog(onDismiss = { showLogs = false })
     val power = remember { context.getSystemService(PowerManager::class.java) }
@@ -135,6 +139,34 @@ fun SettingsScreen(vm: MainViewModel) {
             headlineContent = { Text(stringResource(R.string.settings_version)) },
             supportingContent = { Text(ltr("TunnelLock ${BuildConfig.VERSION_NAME}\n$xrayVersion")) },
         )
+        HorizontalDivider()
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_updates)) },
+            supportingContent = { Text(updateSummary(context, update)) },
+            trailingContent = {
+                if (UpdateChecker.available) {
+                    TextButton(onClick = { vm.checkUpdates() }) { Text(stringResource(R.string.settings_updates_check)) }
+                }
+            },
+        )
+        update?.takeIf { it.status.pending.isNotEmpty() || it.unreadable.isNotEmpty() || it.status.upstream.isNotEmpty() }?.let { info ->
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                UpdateCard(info, inSecureSpace = true, onOpenPersonal = { vm.openPhoneApps(context) })
+            }
+        }
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_updates_notify)) },
+            supportingContent = { Text(stringResource(R.string.settings_updates_notify_desc)) },
+            trailingContent = {
+                Switch(
+                    checked = notifyUpdates,
+                    onCheckedChange = {
+                        notifyUpdates = it
+                        UpdateChecker.setNotificationsOn(context, it)
+                    },
+                )
+            },
+        )
         Card(Modifier.fillMaxWidth().padding(16.dp)) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(R.string.settings_how_title), style = MaterialTheme.typography.titleMedium)
@@ -142,6 +174,20 @@ fun SettingsScreen(vm: MainViewModel) {
             }
         }
     }
+}
+
+private fun updateSummary(context: android.content.Context, info: UpdateChecker.Info?): String {
+    if (!UpdateChecker.available) return context.getString(R.string.settings_updates_unavailable)
+    if (info == null) return context.getString(R.string.settings_updates_never)
+    val latest = info.status.latest
+    val priority = info.priority
+    val state = if (latest != null && priority != null) {
+        context.getString(R.string.settings_updates_available, latest.name, UpdateChecker.priorityLabel(context, priority))
+    } else {
+        context.getString(R.string.settings_updates_current)
+    }
+    val checked = DateUtils.getRelativeTimeSpanString(info.checkedAt, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
+    return state + "\n" + context.getString(R.string.settings_updates_checked, checked)
 }
 
 /**
