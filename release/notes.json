@@ -1,0 +1,6 @@
+{
+  "id": "2026-10-30-update-check",
+  "priority": "recommended",
+  "fa": "TunnelLock حالا خودش نسخهٔ جدید را بررسی می‌کند و بر اساس اهمیت (فوری، مهم، پیشنهادی، اختیاری) خبر می‌دهد؛ اگر سرورهای اشتراک شما پروتکلی داشته باشند که این نسخه نمی‌شناسد هم می‌گوید. «هر اپ از سرور خودش» و پیام روشن برای OpenVPN گیرکرده هم در این نسخه است.",
+  "en": "TunnelLock now looks for new versions itself and tells you how important they are (urgent, important, recommended, optional), and when servers in your subscriptions use a protocol this version does not know. Also in this version: each app on its own server, and a clear message when OpenVPN gets stuck."
+}

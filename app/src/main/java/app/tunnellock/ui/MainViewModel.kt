@@ -23,6 +23,7 @@ import app.tunnellock.data.AppLog
 import app.tunnellock.data.StoredServer
 import app.tunnellock.data.Subscription
 import app.tunnellock.data.SubscriptionUpdater
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.strict.AppGate
 import app.tunnellock.strict.Policy
 import app.tunnellock.vpn.TunnelState
@@ -339,6 +340,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoUpdateSubscriptions(enabled: Boolean) {
         store.setAutoUpdateSubscriptions(enabled)
         if (enabled) viewModelScope.launch { SubscriptionUpdater.updateStale(store) }
+    }
+
+    fun checkUpdates() {
+        viewModelScope.launch {
+            UpdateChecker.check(app, notify = false)
+                .onSuccess { say(R.string.msg_update_checked) }
+                .onFailure { say(R.string.msg_update_failed, it.message.orEmpty()) }
+        }
     }
 
     fun reapplyPolicies() {

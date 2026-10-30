@@ -1,0 +1,25 @@
+name: Upstream check
+
+# Weekly: is there a newer Xray core or OpenVPN than the newest TunnelLock has?
+# If so it is posted on the updates issue, and the apps say a new build is needed.
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  UPDATE_ISSUE: 2
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Look for newer components
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/upstream-check.sh
