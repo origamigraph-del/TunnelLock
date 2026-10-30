@@ -54,6 +54,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.strict.Policy
 import app.tunnellock.ui.theme.phaseColor
 import app.tunnellock.vpn.Phase
@@ -67,6 +68,7 @@ fun HomeScreen(vm: MainViewModel, onOpenServers: () -> Unit, onOpenApps: () -> U
     val servers by vm.store.servers.collectAsStateWithLifecycle()
     val selectedId by vm.store.selectedId.collectAsStateWithLifecycle()
     val selected = servers.find { it.id == selectedId }
+    val update by UpdateChecker.info.collectAsStateWithLifecycle()
 
     var lockdown by remember { mutableStateOf(true) }
     var protectedCount by remember { mutableIntStateOf(0) }
@@ -126,6 +128,9 @@ fun HomeScreen(vm: MainViewModel, onOpenServers: () -> Unit, onOpenApps: () -> U
 
         status.error?.let { error ->
             NoticeCard(text = error, isError = true)
+        }
+        update?.takeIf { it.worthShowing }?.let { info ->
+            UpdateCard(info, inSecureSpace = true, onOpenPersonal = { vm.openPhoneApps(context) })
         }
         if (needsVpnPermission) {
             NoticeCard(

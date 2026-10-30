@@ -36,6 +36,8 @@ android {
         buildConfigField("String", "LOG_TOKEN", "\"$logToken\"")
         buildConfigField("String", "LOG_REPO", "\"$logRepo\"")
         buildConfigField("int", "LOG_ISSUE", "1")
+        // The update feed: the build posts every release's notes and priority there.
+        buildConfigField("int", "UPDATE_ISSUE", "2")
     }
 
     signingConfigs {

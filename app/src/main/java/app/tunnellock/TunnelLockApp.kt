@@ -3,6 +3,7 @@ package app.tunnellock
 import android.app.Application
 import app.tunnellock.data.AppLog
 import app.tunnellock.data.AppStore
+import app.tunnellock.data.UpdateChecker
 import app.tunnellock.vpn.Notifications
 
 class TunnelLockApp : Application() {
@@ -16,5 +17,6 @@ class TunnelLockApp : Application() {
         AppLog.i("App", "process started")
         store = AppStore(this)
         Notifications.createChannel(this)
+        UpdateChecker.load(this)
     }
 }

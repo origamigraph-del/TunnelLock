@@ -33,6 +33,8 @@ data class Subscription(
     val updatedAt: Long = 0,
     /** From the panel's Subscription-Userinfo header, when it sends one. */
     val usage: SubscriptionUsage? = null,
+    /** Entries of the last download this version could not read, by link type ("tuic", "vless"...). */
+    val unreadable: Map<String, Int> = emptyMap(),
 )
 
 /**
@@ -104,7 +106,12 @@ class AppStore(context: Context) {
      * so a refresh never leaves nothing selected.
      */
     @Synchronized
-    fun replaceSubscriptionServers(subscriptionId: String, parsed: List<ParsedServer>, usage: SubscriptionUsage?) {
+    fun replaceSubscriptionServers(
+        subscriptionId: String,
+        parsed: List<ParsedServer>,
+        usage: SubscriptionUsage?,
+        unreadable: Map<String, Int> = emptyMap(),
+    ) {
         val selected = _servers.value.find { it.id == _selectedId.value }
         val fresh = parsed.map { it.toStored(subscriptionId) }
         saveServers(_servers.value.filter { it.subscriptionId != subscriptionId } + fresh)
@@ -113,7 +120,11 @@ class AppStore(context: Context) {
                 ?.let { select(it.id) }
         }
         _subscriptions.value = _subscriptions.value.map {
-            if (it.id == subscriptionId) it.copy(updatedAt = System.currentTimeMillis(), usage = usage ?: it.usage) else it
+            if (it.id == subscriptionId) {
+                it.copy(updatedAt = System.currentTimeMillis(), usage = usage ?: it.usage, unreadable = unreadable)
+            } else {
+                it
+            }
         }
         saveSubscriptions(_subscriptions.value)
     }
@@ -314,6 +325,7 @@ class AppStore(context: Context) {
             it.usage?.let { u ->
                 o.put("used", u.usedBytes).put("total", u.totalBytes).put("expires", u.expiresAt)
             }
+            if (it.unreadable.isNotEmpty()) o.put("unreadable", JSONObject(it.unreadable as Map<*, *>))
             array.put(o)
         }
         prefs.edit().putString(KEY_SUBSCRIPTIONS, array.toString()).apply()
@@ -328,7 +340,8 @@ class AppStore(context: Context) {
             } else {
                 null
             }
-            Subscription(o.optString("id"), o.optString("name"), o.optString("url"), o.optLong("updatedAt"), usage)
+            val unreadable = o.optJSONObject("unreadable")?.let { u -> u.keys().asSequence().associateWith { k -> u.optInt(k) } }.orEmpty()
+            Subscription(o.optString("id"), o.optString("name"), o.optString("url"), o.optLong("updatedAt"), usage, unreadable)
         }
     }
 
