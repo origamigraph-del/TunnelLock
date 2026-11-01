@@ -93,8 +93,9 @@ start_ssh() {
 stop_ssh() {
     [ -f "$OUT/sshd.pid" ] && sudo kill "$(sudo cat "$OUT/sshd.pid")" 2>/dev/null || true
     # Open sessions run in their own processes: end them too, as a server going down would.
-    sudo pkill -f "sshd: e2essh" 2>/dev/null || true
-    sudo pkill -f "sshd-session: e2essh" 2>/dev/null || true
+    # Anchored, so the patterns do not match sudo's own command line.
+    sudo pkill -f "^sshd: e2essh" 2>/dev/null || true
+    sudo pkill -f "^sshd-session: e2essh" 2>/dev/null || true
     sudo pkill -u e2essh 2>/dev/null || true
     for name in socat ws-ssh; do
         [ -f "$OUT/$name.pid" ] && kill "$(cat "$OUT/$name.pid")" 2>/dev/null || true

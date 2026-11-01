@@ -188,7 +188,7 @@
     <string name="error_openvpn_stopped">OpenVPN stopped: %1$s</string>
     <string name="error_own_server_unprotected">Android\'s VPN lockdown is off, so apps with their own server would not be protected with this main server. Not connected; tap Re-apply secure space rules in Settings.</string>
     <string name="error_ssh_login">The SSH server rejected the username, password or key. Edit it in Servers.</string>
-    <string name="error_ssh_hostkey">The SSH server\'s host key changed: a different server answered (someone may be in between). Not connected. If you changed the server yourself, delete it and add it again.</string>
+    <string name="error_ssh_hostkey">The SSH server\'s host key changed: a different server answered (someone may be in between). Not connected. If you changed the server yourself, edit and save it (or delete and add it again) so the new key is accepted.</string>
     <string name="error_ssh_start">SSH did not connect: %1$s</string>
     <string name="error_openvpn_stuck">The server answered, but the connection got stuck halfway. This usually means your internet filters OpenVPN; try a V2Ray server.</string>
     <string name="error_openvpn_no_answer">The OpenVPN server does not answer at all: the config\'s address, port or key is wrong, the server is down, or it is blocked.</string>

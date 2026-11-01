@@ -80,4 +80,12 @@ class SshLinkTest {
         assertEquals("pw", settings.getString("pass"))
         assertFalse(proxy.has("streamSettings"))
     }
+
+    @Test
+    fun accountsBehindOneCdnAddressKeepTheirOwnHostKeys() {
+        val a = LinkParser.parse("ssh://u@cdn.example:443?transport=wss&host=a.example&path=%2Fa")
+        val b = LinkParser.parse("ssh://u@cdn.example:443?transport=wss&host=b.example&path=%2Fb")
+        assert(SshLink.hostKeyId(a) != SshLink.hostKeyId(b))
+        assertEquals(SshLink.hostKeyId(a), SshLink.hostKeyId(LinkParser.parse("ssh://other:pw@cdn.example:443?transport=wss&host=a.example&path=%2Fa#x")))
+    }
 }
