@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.content.pm.CrossProfileApps
 import android.os.Build
 import android.os.UserHandle
+import android.os.UserManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -202,6 +203,10 @@ private fun PersonalHub(space: UserHandle) {
         UpdateChecker.checkIfDue(context, notify = false, maxAgeMs = 10 * 60_000L)
     }
     val update by UpdateChecker.info.collectAsStateWithLifecycle()
+    // "Work apps" paused: nothing in the secure space runs, TunnelLock included.
+    val spacePaused = remember(reload) {
+        runCatching { context.getSystemService(UserManager::class.java).isQuietModeEnabled(space) }.getOrDefault(false)
+    }
     val sendFailed = stringResource(R.string.hub_send_failed)
     val tileAdded = stringResource(R.string.hub_tile_added)
     var tileOn by remember { mutableStateOf(ToggleTileService.isEnabled(context)) }
@@ -259,6 +264,9 @@ private fun PersonalHub(space: UserHandle) {
                         ) { Text(stringResource(R.string.setup_open)) }
                     }
                 }
+            }
+            if (spacePaused) {
+                item { NoticeCard(text = stringResource(R.string.hub_space_paused), isError = true) }
             }
             update?.takeIf { it.status.pending.isNotEmpty() || it.status.upstream.isNotEmpty() }?.let { info ->
                 item { UpdateCard(info, inSecureSpace = false) }

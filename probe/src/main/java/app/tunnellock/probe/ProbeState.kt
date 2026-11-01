@@ -142,14 +142,32 @@ object ProbeState {
     fun sendInBackground(context: Context, text: String) {
         val app = context.applicationContext
         val outbox = File(app.filesDir, "outbox").apply { mkdirs() }
-        runCatching { File(outbox, "${System.currentTimeMillis()}.log").writeText(text) }
+        // The same session sent twice (the button and the automatic send) is posted once.
+        val hash = sha256(text)
+        val queued = outbox.listFiles().orEmpty().any { runCatching { sha256(it.readText()) == hash }.getOrDefault(false) }
+        if (queued || prefs(app).getString("lastSent", null) == hash) {
+            log(app, "-- this log was already sent or is waiting to be sent")
+        } else {
+            runCatching { File(outbox, "${System.currentTimeMillis()}.log").writeText(text) }
+        }
         flushOutbox(app)
     }
+
+    private fun sha256(text: String): String =
+        java.security.MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).joinToString("") { "%02x".format(it) }
 
     /** Sends queued logs, oldest first. Cheap to call often: no-op while sending or when empty. */
     fun flushOutbox(context: Context) {
         if (!ProbeReport.available) return
         val app = context.applicationContext
+        // A log that could not go out for days is stale: the newer ones tell more.
+        val now = System.currentTimeMillis()
+        File(app.filesDir, "outbox").listFiles().orEmpty()
+            .filter { now - it.lastModified() > 3 * 24 * 60 * 60 * 1000L }
+            .forEach { stale ->
+                stale.delete()
+                log(app, "-- a log not sent for more than 3 days was dropped")
+            }
         val pending = File(app.filesDir, "outbox").listFiles()?.sortedBy { it.name }.orEmpty()
         if (pending.isEmpty() || !flushing.compareAndSet(false, true)) return
         Thread {
@@ -157,6 +175,7 @@ object ProbeState {
                 for (file in pending) {
                     val result = ProbeReport.send(app, file.readText())
                     if (result.isSuccess) {
+                        runCatching { prefs(app).edit().putString("lastSent", sha256(file.readText())).apply() }
                         file.delete()
                         log(app, "-- log sent to the developer")
                     } else {

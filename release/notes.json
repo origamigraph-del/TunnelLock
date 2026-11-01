@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-01-ssh",
-  "priority": "recommended",
-  "fa": "پشتیبانی از SSH: سرور SSH با رمز یا کلید، مستقیم، داخل TLS (با SNI) یا از طریق WebSocket (پشت CDN). کلید سرور به خاطر سپرده می‌شود و اگر سرور دیگری جواب بدهد وصل نمی‌شود. SSH فقط TCP را می‌برد.",
-  "en": "SSH support: SSH servers with a password or key, direct, inside TLS (with SNI) or over WebSocket (behind a CDN). The server's key is remembered and a different server is refused. SSH carries TCP only."
+  "id": "2026-11-01-vpn-clash-xray",
+  "priority": "important",
+  "fa": "رفع تداخل با VPN گوشی: آدرس تونل TunnelLock دیگر با اپ‌هایی مثل Hiddify و NekoBox یکی نیست، VPN دیگری که در محیط عادی روشن شود مسیر TunnelLock را عوض نمی‌کند، و اگر اندروید VPN را لغو کند TunnelLock خودش برمی‌گردد. Xray core به v26.10.31 به‌روز شد. با صفحهٔ خاموش اتصال هر یک دقیقه بررسی می‌شود تا باتری کمتر مصرف شود (در تنظیمات قابل خاموش کردن). TunnelLock بیرونی اگر فضای امن خاموش باشد هشدار می‌دهد.",
+  "en": "Fixes clashes with another VPN on the phone: TunnelLock's tunnel no longer shares its address with apps like Hiddify and NekoBox, a VPN turned on in the personal profile no longer changes TunnelLock's way out, and TunnelLock comes back by itself if Android revokes its VPN. Xray core updated to v26.10.31. With the screen off the connection is checked every minute to save battery (can be turned off in Settings). The outer TunnelLock warns when the secure space is paused."
 }

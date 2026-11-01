@@ -13,8 +13,8 @@ permissions:
 
 env:
   # Xray core for Android, built by the AndroidLibXrayLite project (same core v2rayNG uses).
-  XRAY_LIB_VERSION: v26.10.21
-  XRAY_LIB_SHA256: e56ec3b06485fe7b37af26948673951edf719c50d6bbc618b8539045952adde4
+  XRAY_LIB_VERSION: v26.10.31
+  XRAY_LIB_SHA256: 2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6
   # NDK used to build the OpenVPN binary.
   NDK_VERSION: 27.2.12479018
   # Password of signing/release.jks (repository secret).

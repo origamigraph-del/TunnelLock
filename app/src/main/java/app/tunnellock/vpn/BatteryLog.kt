@@ -3,6 +3,8 @@ package app.tunnellock.vpn
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.TrafficStats
 import android.os.BatteryManager
 import android.os.PowerManager
@@ -68,9 +70,28 @@ class BatteryLog(private val context: Context) {
             TAG,
             "$reason: $level%$levelChange, ${if (charging) "charging" else "on battery"}, $current, ${temperature}°C | " +
                 "screen ${if (power.isInteractive) "on" else "off"}, idle ${yesNo(power.isDeviceIdleMode)}, " +
-                "saver ${yesNo(power.isPowerSaveMode)} | $cpu | $data | $healthChecks checks | $phase",
+                "saver ${yesNo(power.isPowerSaveMode)} | $cpu | $data | $healthChecks checks | $phase | ${network()}",
         )
     }
+
+    /**
+     * TunnelLock's way out and the VPNs it can see (its own, or one in the personal profile
+     * on phones that show it): to understand clashes with another VPN.
+     */
+    @Suppress("DEPRECATION")
+    private fun network(): String = runCatching {
+        val cm = context.getSystemService(ConnectivityManager::class.java)
+        val caps = cm.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        val out = when {
+            caps == null -> "no network"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) -> "via a VPN"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+            else -> "other"
+        }
+        val vpns = cm.allNetworks.count { cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true }
+        "net $out, VPNs seen $vpns"
+    }.getOrDefault("net ?")
 
     /** CPU time of the OpenVPN process (a child of ours; /proc shows only our own processes). */
     private fun openVpnCpuMs(): Long {

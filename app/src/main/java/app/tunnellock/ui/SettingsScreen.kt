@@ -50,6 +50,7 @@ fun SettingsScreen(vm: MainViewModel) {
     val pauseWhenDisconnected by vm.store.pauseWhenDisconnected.collectAsStateWithLifecycle()
     val failover by vm.store.failover.collectAsStateWithLifecycle()
     val autoUpdate by vm.store.autoUpdateSubscriptions.collectAsStateWithLifecycle()
+    val batterySaving by vm.store.batterySaving.collectAsStateWithLifecycle()
     val xrayVersion by produceState("…") {
         value = withContext(Dispatchers.IO) { XrayCore.version(context) }
     }
@@ -85,6 +86,12 @@ fun SettingsScreen(vm: MainViewModel) {
             headlineContent = { Text(stringResource(R.string.settings_failover)) },
             supportingContent = { Text(stringResource(R.string.settings_failover_desc)) },
             trailingContent = { Switch(checked = failover, onCheckedChange = vm::setFailover) },
+        )
+        HorizontalDivider()
+        ListItem(
+            headlineContent = { Text(stringResource(R.string.settings_battery_saving)) },
+            supportingContent = { Text(stringResource(R.string.settings_battery_saving_desc)) },
+            trailingContent = { Switch(checked = batterySaving, onCheckedChange = vm::setBatterySaving) },
         )
         HorizontalDivider()
         ListItem(
