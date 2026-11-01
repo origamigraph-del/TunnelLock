@@ -102,4 +102,6 @@ dependencies {
     implementation(libs.zxing.android.embedded)
     // SSH servers (a maintained JSch: modern key exchanges, ciphers and keys).
     implementation(libs.jsch)
+    // Ed25519 keys, Curve25519 key exchange and ChaCha20 for JSch (Android has no JCE support for them).
+    implementation(libs.bouncycastle)
 }

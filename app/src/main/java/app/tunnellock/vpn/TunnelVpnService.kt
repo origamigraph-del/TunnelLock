@@ -287,6 +287,7 @@ class TunnelVpnService : VpnService() {
         scope.cancel()
         XrayCore.stop()
         openVpn.kill()
+        ssh.stop()
         closeTun()
         // Apps are not paused here: someone may be using one. Lockdown cuts their internet.
         TunnelState.update { it.copy(phase = Phase.OFF, connectedSince = null) }
@@ -431,10 +432,11 @@ class TunnelVpnService : VpnService() {
     }
 
     private suspend fun stopSession() {
+        // First, so a session waiting for an SSH server that does not answer ends at once.
+        ssh.stop()
         session?.cancelAndJoin()
         session = null
         XrayCore.stop()
-        ssh.stop()
         openVpn.stop()
         openVpnEvents = null
     }

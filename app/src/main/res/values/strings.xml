@@ -199,7 +199,7 @@
     <string name="error_openvpn_stopped">OpenVPN متوقف شد: %1$s</string>
     <string name="error_own_server_unprotected">قفل VPN اندروید (lockdown) خاموش است، پس اپ‌هایی که سرور جدا دارند با این سرور اصلی محافظت نمی‌شوند. وصل نشد؛ در تنظیمات «اعمال دوباره قوانین فضای امن» را بزنید.</string>
     <string name="error_ssh_login">سرور SSH نام کاربری، رمز یا کلید را نپذیرفت. از بخش سرورها ویرایش کنید.</string>
-    <string name="error_ssh_hostkey">کلید سرور SSH عوض شده: سرور دیگری جواب داده (ممکن است کسی وسط راه باشد). وصل نشد. اگر خودتان سرور را عوض کرده‌اید، سرور را حذف و دوباره اضافه کنید.</string>
+    <string name="error_ssh_hostkey">کلید سرور SSH عوض شده: سرور دیگری جواب داده (ممکن است کسی وسط راه باشد). وصل نشد. اگر خودتان سرور را عوض کرده‌اید، سرور را ویرایش و ذخیره کنید (یا حذف و دوباره اضافه کنید) تا کلید تازه پذیرفته شود.</string>
     <string name="error_ssh_start">SSH وصل نشد: %1$s</string>
     <string name="error_openvpn_stuck">سرور جواب داد ولی اتصال وسط راه گیر کرد. معمولاً یعنی اینترنت شما OpenVPN را فیلتر می‌کند؛ سرور V2Ray را امتحان کنید.</string>
     <string name="error_openvpn_no_answer">سرور OpenVPN هیچ جوابی نمی‌دهد: آدرس، پورت یا کلید کانفیگ اشتباه است، سرور خاموش است یا مسدود شده.</string>

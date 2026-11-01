@@ -2,6 +2,7 @@ package app.tunnellock.vpn
 
 import android.os.SystemClock
 import app.tunnellock.core.model.ServerProfile
+import app.tunnellock.core.parser.SshLink
 import app.tunnellock.data.AppLog
 import com.jcraft.jsch.ChannelDirectTCPIP
 import com.jcraft.jsch.HostKey
@@ -23,7 +24,13 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import java.util.Base64
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executors
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.SNIHostName
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLSocket
@@ -67,16 +74,30 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         /** A rejected login or a changed host key will not change in seconds. */
         const val RETRY_AFTER_REFUSAL_MS = 60_000L
         const val KEEPALIVE_MS = 15_000
+
+        /** TCP, TLS, the upgrade and SSH each get [CONNECT_TIMEOUT_MS]. */
+        const val ATTEMPT_LIMIT_MS = 90_000L
+
+        /** Server data waiting for an app that does not read; more and that connection is dropped. */
+        const val MAX_QUEUED_BYTES = 4L * 1024 * 1024
     }
 
     private val lock = Any()
     private val workers = Executors.newCachedThreadPool { r -> Thread(r, "ssh-bridge").apply { isDaemon = true } }
     @Volatile private var server: ServerSocket? = null
+
+    // Guarded by [lock]. A new start (or stop) begins a new generation: late results of an
+    // older one are thrown away.
+    private var generation = 0
     private var profile: ServerProfile? = null
     private var login: SshLogin? = null
     private var session: Session? = null
+    private var attempt: CompletableFuture<Session>? = null
     private var lastFailure = 0L
     private var lastError: IOException? = null
+
+    /** The socket of the connection attempt in progress, so [stop] can cut it short. */
+    @Volatile private var dialing: Socket? = null
 
     /** Starts the proxy for [profile]; the SSH connection is made by [connect] or the first request. */
     fun start(profile: ServerProfile, login: SshLogin): Bridge {
@@ -85,6 +106,7 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         val user = "tunnellock"
         val password = randomToken()
         synchronized(lock) {
+            generation++
             this.profile = profile
             this.login = login
             lastFailure = 0L
@@ -100,39 +122,85 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         session()
     }
 
+    /** Ends everything at once, also a connection attempt still waiting for the server. */
     fun stop() {
         runCatching { server?.close() }
         server = null
-        val old = synchronized(lock) {
+        val (old, pending) = synchronized(lock) {
+            generation++
             profile = null
-            session.also { session = null }
+            login = null
+            val current = session to attempt
+            session = null
+            attempt = null
+            current
         }
+        pending?.completeExceptionally(IOException("SSH tunnel stopped"))
+        runCatching { dialing?.close() }
         runCatching { old?.disconnect() }
     }
 
     // ---- SSH --------------------------------------------------------------------
 
-    private fun session(): Session = synchronized(lock) {
-        session?.takeIf { it.isConnected }?.let { return it }
-        val p = profile ?: throw IOException("SSH tunnel stopped")
-        val l = login ?: throw IOException("SSH tunnel stopped")
-        val now = SystemClock.elapsedRealtime()
-        // Many requests arrive at once while the server is down: one attempt answers them all.
-        val wait = if (lastError is LoginException || lastError is HostKeyException) RETRY_AFTER_REFUSAL_MS else RETRY_MS
-        if (now - lastFailure < wait) throw lastError ?: IOException("SSH not connected")
-        try {
-            open(p, l).also {
-                session = it
-                lastError = null
-                AppLog.i(TAG, "connected to ${p.displayAddress} (${p.stream.network})")
+    /**
+     * The SSH connection, connecting if needed. While the server is down many requests
+     * arrive at once: they share one attempt, and after a failure get the same error for
+     * a few seconds instead of each trying again.
+     */
+    private fun session(): Session {
+        val pending = synchronized(lock) {
+            session?.takeIf { it.isConnected }?.let { return it }
+            attempt ?: run {
+                val p = profile ?: throw IOException("SSH tunnel stopped")
+                val l = login ?: throw IOException("SSH tunnel stopped")
+                val refused = lastError is LoginException || lastError is HostKeyException
+                if (SystemClock.elapsedRealtime() - lastFailure < if (refused) RETRY_AFTER_REFUSAL_MS else RETRY_MS) {
+                    throw lastError ?: IOException("SSH not connected")
+                }
+                val gen = generation
+                CompletableFuture<Session>().also { future ->
+                    attempt = future
+                    workers.execute { dial(future, gen, p, l) }
+                }
             }
-        } catch (e: Exception) {
-            val error = explain(e)
-            lastFailure = now
-            lastError = error
+        }
+        return try {
+            pending.get(ATTEMPT_LIMIT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: ExecutionException) {
+            throw e.cause as? IOException ?: IOException(e.cause?.message ?: "SSH failed")
+        } catch (e: TimeoutException) {
+            throw IOException("SSH connection timed out")
+        } catch (e: InterruptedException) {
+            throw IOException("interrupted")
+        }
+    }
+
+    private fun dial(future: CompletableFuture<Session>, gen: Int, p: ServerProfile, l: SshLogin) {
+        val result = runCatching { open(p, l) }
+        dialing = null
+        val error = result.exceptionOrNull()?.let { explain(it) }
+        val current = synchronized(lock) {
+            if (attempt === future) attempt = null
+            (gen == generation).also { current ->
+                if (current && error == null) {
+                    session = result.getOrNull()
+                    lastError = null
+                } else if (current) {
+                    lastFailure = SystemClock.elapsedRealtime()
+                    lastError = error
+                }
+            }
+        }
+        if (error != null) {
             AppLog.w(TAG, "connecting failed: ${error.message}")
-            if (error is LoginException || error is HostKeyException) onProblem(error)
-            throw error
+            if (current && (error is LoginException || error is HostKeyException)) onProblem(error)
+            future.completeExceptionally(error)
+        } else if (!current) {
+            runCatching { result.getOrNull()?.disconnect() }
+            future.completeExceptionally(IOException("SSH tunnel stopped"))
+        } else {
+            AppLog.i(TAG, "connected to ${p.displayAddress} (${p.stream.network})")
+            future.complete(result.getOrThrow())
         }
     }
 
@@ -141,7 +209,7 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         l.privateKey?.takeIf { it.isNotBlank() }?.let { key ->
             jsch.addIdentity("key", key.trim().toByteArray(), null, l.keyPassphrase?.takeIf { it.isNotEmpty() }?.toByteArray())
         }
-        jsch.setHostKeyRepository(PinnedHostKey("${p.address}:${p.port}", p.hostKey))
+        jsch.setHostKeyRepository(PinnedHostKey(SshLink.hostKeyId(p), p.hostKey))
         val s = jsch.getSession(l.username, p.address, p.port)
         l.password?.takeIf { it.isNotEmpty() }?.let { s.setPassword(it) }
         s.setUserInfo(Answers(l.password))
@@ -154,14 +222,16 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         return s
     }
 
-    private fun explain(e: Exception): IOException {
+    private fun explain(e: Throwable): IOException {
         val message = e.message.orEmpty()
         return when {
-            e is IOException && e !is java.net.SocketException -> e
-            "Auth fail" in message || "Auth cancel" in message || "USERAUTH fail" in message ->
+            listOf("Auth fail", "Auth cancel", "USERAUTH fail", "Too many authentication failures").any { it in message } ->
                 LoginException("the server rejected the username, password or key")
+            "invalid privatekey" in message ->
+                LoginException("the private key could not be read (its format or passphrase)")
             "HostKey has been changed" in message ->
                 HostKeyException("the server's host key changed: a different server answered")
+            e is IOException && e !is java.net.SocketException -> e
             else -> IOException(message.ifEmpty { e.javaClass.simpleName })
         }
     }
@@ -194,11 +264,16 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
         override fun getHostKey(host: String?, type: String?): Array<HostKey> = emptyArray()
     }
 
-    /** Answers "password" prompts (keyboard-interactive) with the password; nothing else. */
+    /**
+     * The password is given once (setPassword): no prompt may hand it out again, so a
+     * wrong password costs one try, not the server's whole allowance (and a ban).
+     */
     private class Answers(private val password: String?) : UserInfo, UIKeyboardInteractive {
+        private var answered = false
+
         override fun getPassphrase(): String? = null
         override fun getPassword(): String? = password
-        override fun promptPassword(message: String?) = !password.isNullOrEmpty()
+        override fun promptPassword(message: String?) = false
         override fun promptPassphrase(message: String?) = false
         override fun promptYesNo(message: String?) = false
         override fun showMessage(message: String?) = Unit
@@ -209,8 +284,9 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
             prompt: Array<out String>?,
             echo: BooleanArray?,
         ): Array<String>? {
-            if (password.isNullOrEmpty() || prompt == null) return null
+            if (answered || password.isNullOrEmpty() || prompt.isNullOrEmpty()) return null
             if (prompt.any { !it.contains("password", ignoreCase = true) }) return null
+            answered = true
             return Array(prompt.size) { password }
         }
     }
@@ -220,9 +296,10 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
      * stunnel or a CDN usually have no certificate a phone would trust); the host key
      * check above is what proves the server.
      */
-    private class Transport(private val p: ServerProfile) : SocketFactory {
+    private inner class Transport(private val p: ServerProfile) : SocketFactory {
         override fun createSocket(host: String, port: Int): Socket {
             val plain = Socket()
+            dialing = plain
             plain.connect(InetSocketAddress(host, port), CONNECT_TIMEOUT_MS)
             plain.tcpNoDelay = true
             val tls = p.stream.network == "tls" || p.stream.network == "wss"
@@ -332,14 +409,14 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
             } ?: return reply(output, 4)
             val port = input.readUnsignedShort()
             if (command != 1) return reply(output, 7)
+            val downstream = Downstream(client)
             channel = try {
                 (session().openChannel("direct-tcpip") as ChannelDirectTCPIP).apply {
                     setHost(host)
                     setPort(port)
                     setOrgIPAddress("127.0.0.1")
                     setOrgPort(client.port)
-                    // The server's data goes straight to Xray; its end closes the socket.
-                    setOutputStream(output)
+                    setOutputStream(downstream)
                 }
             } catch (e: Exception) {
                 return reply(output, 1)
@@ -350,7 +427,9 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
             } catch (e: Exception) {
                 return reply(output, 5)
             }
+            // The reply first, then the server's data (some servers speak first).
             reply(output, 0)
+            downstream.release()
             client.soTimeout = 0
             val buffer = ByteArray(16_384)
             while (true) {
@@ -370,6 +449,59 @@ class SshTunnel(private val hostKeys: HostKeys, private val onProblem: (IOExcept
             runCatching { client.close() }
         }
     }
+
+    /**
+     * The server's data for one connection, written to Xray by its own thread. JSch hands
+     * every channel's data over on one thread: an app that stops reading must not hold up
+     * all the others, so its data waits in a queue, and past a limit only it is dropped.
+     */
+    private inner class Downstream(private val socket: Socket) : OutputStream() {
+        private val queue = LinkedBlockingQueue<ByteArray>()
+        private val queued = AtomicLong()
+        @Volatile private var closed = false
+
+        /** Starts writing (after the SOCKS reply). */
+        fun release() {
+            workers.execute(::drain)
+        }
+
+        override fun write(b: Int) = write(byteArrayOf(b.toByte()), 0, 1)
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            if (closed) throw IOException("connection closed")
+            if (queued.addAndGet(len.toLong()) > MAX_QUEUED_BYTES) {
+                closed = true
+                runCatching { socket.close() }
+                throw IOException("the app stopped reading")
+            }
+            queue.put(b.copyOfRange(off, off + len))
+        }
+
+        /** The server is done: what is queued still goes out, then the connection closes. */
+        override fun close() {
+            if (closed) return
+            closed = true
+            queue.put(END)
+        }
+
+        private fun drain() {
+            try {
+                val out = socket.getOutputStream()
+                while (true) {
+                    val chunk = queue.take()
+                    if (chunk === END) break
+                    out.write(chunk)
+                    queued.addAndGet(-chunk.size.toLong())
+                }
+            } catch (e: Exception) {
+                // Xray went away.
+            } finally {
+                runCatching { socket.close() }
+            }
+        }
+    }
+
+    private val END = ByteArray(0)
 
     private fun reply(output: OutputStream, code: Int) {
         runCatching { output.write(byteArrayOf(5, code.toByte(), 0, 1, 0, 0, 0, 0, 0, 0)) }
