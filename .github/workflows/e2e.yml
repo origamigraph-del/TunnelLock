@@ -112,7 +112,7 @@ jobs:
       - name: Server logs
         if: always()
         run: |
-          for f in xray.log xray-b.log openvpn.log emulator.log; do
+          for f in xray.log xray-b.log openvpn.log sshd.log emulator.log; do
             [ -f "e2e/out/$f" ] && echo "::notice title=$f::$(sudo tail -25 "e2e/out/$f" | cut -c1-200 | sed ':a;N;$!ba;s/\n/%0A/g')"
           done
           true

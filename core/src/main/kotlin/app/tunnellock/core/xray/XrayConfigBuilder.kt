@@ -223,10 +223,22 @@ object XrayConfigBuilder {
                 o.put("protocol", "hysteria")
                 o.put("settings", JSONObject().put("version", 2).put("address", p.address).put("port", p.port))
             }
+            Protocol.SOCKS -> {
+                o.put("protocol", "socks")
+                o.put(
+                    "settings",
+                    JSONObject()
+                        .put("address", p.address)
+                        .put("port", p.port)
+                        .putOpt("user", p.username)
+                        .putOpt("pass", p.secret.takeIf { p.username != null }),
+                )
+            }
             Protocol.CUSTOM -> error("Custom profiles carry their own outbounds")
             Protocol.OPENVPN -> error("OpenVPN does not run on Xray")
+            Protocol.SSH -> error("SSH runs its own connection; Xray reaches it as SOCKS")
         }
-        if (p.protocol != Protocol.SHADOWSOCKS) {
+        if (p.protocol != Protocol.SHADOWSOCKS && p.protocol != Protocol.SOCKS) {
             val stream = streamSettings(p.stream)
             if (p.protocol == Protocol.HYSTERIA2) {
                 stream.put("hysteriaSettings", JSONObject().put("version", 2).put("auth", p.secret))

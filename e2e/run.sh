@@ -324,6 +324,62 @@ fi
 "$ROOT/e2e/servers.sh" start xray-b
 m=$(mark); sleep 25; check_online "Own server back" "$m"
 
+# ---- 5c. SSH: in TLS, over WebSocket and plain; down, wrong password, changed host key ---
+
+ssh_lines() { sudo wc -l <"$OUT/sshd.log" 2>/dev/null || echo 0; }
+ssh_forwards() { sudo tail -n +"$(($1 + 1))" "$OUT/sshd.log" 2>/dev/null | grep -c "direct_tcpip.*ipify" || true; }
+ssh_why() { applog | tail -n +"$(($1 + 1))" | grep -E "SSH|TunnelVpn" | tail -3 | cut -c1-160 | tr '\n' ' '; }
+
+for transport in tls ws tcp; do
+    from=$(applines); s0=$(ssh_lines)
+    start_with "ssh-$transport"
+    if wait_phase CONNECTED "$from" 120; then
+        m=$(mark); sleep 25; check_online "SSH $transport online" "$m"
+        n=$(ssh_forwards "$s0")
+        if [ "$n" -gt 0 ]; then
+            pass "SSH $transport through the server" "the SSH server opened $n connections to ipify for the probe"
+        else
+            fail "SSH $transport through the server" "sshd forwarded nothing: $(sudo tail -n +"$((s0 + 1))" "$OUT/sshd.log" | grep -iE 'direct|Accepted|fail|error' | tail -3 | cut -c1-140 | tr '\n' ' ')"
+        fi
+    else
+        fail "SSH $transport connect" "no CONNECTED within 120 s: $(ssh_why "$from")"
+    fi
+done
+
+# Still on plain SSH: the server goes down (sessions too) and comes back.
+m=$(mark); from=$(applines)
+"$ROOT/e2e/servers.sh" stop ssh
+sleep 50
+check_blocked "SSH server down" "$m"
+if applog | tail -n +"$((from + 1))" | grep -q -- "-> RECONNECTING"; then pass "SSH drop detected" "TunnelLock went to RECONNECTING"; else fail "SSH drop detected" "no RECONNECTING: $(ssh_why "$from")"; fi
+from=$(applines)
+"$ROOT/e2e/servers.sh" start ssh
+if wait_phase CONNECTED "$from" 120; then pass "SSH reconnect" "connected again by itself"; else fail "SSH reconnect" "no CONNECTED within 120 s: $(ssh_why "$from")"; fi
+
+m=$(mark); from=$(applines)
+start_with ssh-wrong
+if wait_phase GUARDING "$from" 90 && applog | tail -n +"$((from + 1))" | grep -q "rejected the username"; then
+    pass "SSH wrong password" "stopped with the login error"
+else
+    fail "SSH wrong password" "no login error within 90 s: $(ssh_why "$from")"
+fi
+sleep 20
+check_blocked "SSH wrong password blocks" "$m"
+
+# A different server answers on the same address: refused, apps stay blocked.
+from=$(applines)
+start_with ssh-tcp
+wait_phase CONNECTED "$from" 120 || fail "SSH before key change" "no CONNECTED within 120 s: $(ssh_why "$from")"
+m=$(mark); from=$(applines)
+"$ROOT/e2e/servers.sh" new-hostkeys ssh
+sleep 45
+if applog | tail -n +"$((from + 1))" | grep -q "host key of .* changed"; then
+    pass "SSH host key change" "the new key was refused"
+else
+    fail "SSH host key change" "no refusal: $(ssh_why "$from")"
+fi
+check_blocked "SSH host key change blocks" "$m"
+
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
 from=$(applines)
