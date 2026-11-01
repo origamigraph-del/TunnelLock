@@ -257,4 +257,7 @@
     <string name="ssh_hostkey">Server key fingerprint, optional (SHA256:...). If empty, the first one seen is remembered.</string>
     <string name="msg_ssh_saved">SSH server "%1$s" saved.</string>
     <string name="msg_ssh_invalid">The port must be a number from 1 to 65535.</string>
+    <string name="settings_battery_saving">Save battery with the screen off</string>
+    <string name="settings_battery_saving_desc">With the screen off the connection is checked every minute instead of every 15 seconds, and at once when the screen comes on. A drop is then noticed up to about a minute later (apps have no internet meanwhile either; nothing gets out).</string>
+    <string name="hub_space_paused">The secure space is off ("work apps" paused): protected apps cannot open and TunnelLock does not run inside it (no connection, no update checks). Turn on "Work apps" in Quick Settings.</string>
 </resources>
