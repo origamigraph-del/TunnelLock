@@ -40,7 +40,7 @@ class ToggleActivity : Activity() {
             return
         }
         AppLog.i(TAG, if (connect) "connect from the quick tile" else "disconnect from the quick tile")
-        TunnelVpnService.send(this, if (connect) TunnelVpnService.ACTION_CONNECT else TunnelVpnService.ACTION_DISCONNECT)
+        TunnelVpnService.send(this, if (connect) TunnelVpnService.ACTION_CONNECT else TunnelVpnService.ACTION_DISCONNECT, "the quick tile")
         Toast.makeText(this, if (connect) R.string.tile_connecting else R.string.tile_disconnected, Toast.LENGTH_SHORT).show()
     }
 }

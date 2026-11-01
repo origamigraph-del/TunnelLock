@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -76,12 +77,27 @@ class TunnelVpnService : VpnService() {
         const val ACTION_CONNECT = "app.tunnellock.action.CONNECT"
         const val ACTION_DISCONNECT = "app.tunnellock.action.DISCONNECT"
 
+        /** Why a connect or disconnect was asked for, for the log. */
+        const val EXTRA_REASON = "reason"
+
         private const val MTU = 1500
         private val TEST_URLS = listOf(
             "https://www.gstatic.com/generate_204",
             "https://cp.cloudflare.com/generate_204",
         )
         private const val CHECK_INTERVAL_MS = 15_000L
+
+        /** With the screen off (battery saving): a drop is noticed within about a minute. */
+        private const val CHECK_INTERVAL_SCREEN_OFF_MS = 60_000L
+
+        /**
+         * The interface's own addresses. Not sing-box's defaults (172.19.0.1, fdfe:dcba:9876::1),
+         * which VPN apps like Hiddify and NekoBox use in the personal profile: the phone has one
+         * network stack for both profiles, and two interfaces with the same address get in each
+         * other's way.
+         */
+        private const val TUN_IPV4 = "10.233.97.1"
+        private const val TUN_IPV6 = "fd8e:6d17:21c0::1"
         private const val INITIAL_ATTEMPTS = 3
         private const val MAX_BACKOFF_MS = 30_000L
 
@@ -95,10 +111,10 @@ class TunnelVpnService : VpnService() {
         /** A connect tap gives up after at most this long (OpenVPN keeps retrying on its own otherwise). */
         private const val OPENVPN_MAX_CONNECT_TIMEOUT_MS = 180_000L
 
-        fun send(context: Context, action: String) {
+        fun send(context: Context, action: String, reason: String? = null) {
             ContextCompat.startForegroundService(
                 context,
-                Intent(context, TunnelVpnService::class.java).setAction(action),
+                Intent(context, TunnelVpnService::class.java).setAction(action).putExtra(EXTRA_REASON, reason),
             )
         }
     }
@@ -167,6 +183,9 @@ class TunnelVpnService : VpnService() {
     /** Health checks since the last battery sample (each one wakes the radio). */
     private val healthChecks = AtomicInteger()
 
+    /** Wakes the health check before its time (the screen came on). */
+    private val checkNow = Channel<Unit>(Channel.CONFLATED)
+
     private val powerReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             val reason = when (intent.action) {
@@ -178,6 +197,8 @@ class TunnelVpnService : VpnService() {
                 PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> "idle mode changed"
                 else -> return
             }
+            // Checks are rarer with the screen off: check at once when the phone is used again.
+            if (intent.action == Intent.ACTION_SCREEN_ON) checkNow.trySend(Unit)
             scope.launch { sampleBattery(reason) }
         }
     }
@@ -193,30 +214,64 @@ class TunnelVpnService : VpnService() {
             if (intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)) return
             val pkg = intent.data?.schemeSpecificPart ?: return
             // Reinstalled, an app gets a new UID: its own-server rule must follow it.
-            if (pkg in store.appServers.value && TunnelState.status.value.phase.isActive) commands.trySend(Command.Connect)
+            if (pkg in store.appServers.value && TunnelState.status.value.phase.isActive) {
+                AppLog.i(TAG, "reconnecting: an app with its own server was installed or removed")
+                commands.trySend(Command.Connect)
+            }
             if (intent.action == Intent.ACTION_PACKAGE_ADDED) AppGate.closeNewApp(context, pkg)
         }
     }
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
+            val caps = runCatching { getSystemService(ConnectivityManager::class.java).getNetworkCapabilities(network) }.getOrNull()
+            // TunnelLock's way out is the phone's own network. A VPN showing up here (one the
+            // user runs in the personal profile, on some phones) is not a new way out: following
+            // it would restart the tunnel every time that VPN comes and goes.
+            if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true) {
+                AppLog.w(TAG, "network: a VPN (${transports(caps)}) became TunnelLock's default network; ignored")
+                return
+            }
             val previous = currentNetwork
             currentNetwork = network
-            if (networkKnown && previous != network) commands.trySend(Command.NetworkChanged)
+            if (networkKnown && previous != network) {
+                AppLog.i(TAG, "network: changed to ${transports(caps)}")
+                commands.trySend(Command.NetworkChanged)
+            } else if (!networkKnown) {
+                AppLog.i(TAG, "network: ${transports(caps)}")
+            }
             networkKnown = true
         }
 
         override fun onLost(network: Network) {
             if (network == currentNetwork) {
+                AppLog.i(TAG, "network: lost")
                 currentNetwork = null
                 commands.trySend(Command.NetworkChanged)
             }
         }
     }
 
+    private fun transports(caps: NetworkCapabilities?): String {
+        if (caps == null) return "unknown"
+        return listOfNotNull(
+            "VPN".takeIf { caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN) },
+            "Wi-Fi".takeIf { caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) },
+            "mobile".takeIf { caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) },
+            "Ethernet".takeIf { caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) },
+        ).joinToString("+").ifEmpty { "other" } + if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) "" else " (not validated)"
+    }
+
     override fun onCreate() {
         super.onCreate()
         store = (application as TunnelLockApp).store
+        // A long gap means TunnelLock was not running: the secure space was paused ("work apps"
+        // off) or Android stopped it. Nothing gets out meanwhile, but nothing is checked either.
+        store.lastAlive().takeIf { it > 0 }?.let { last ->
+            val gap = System.currentTimeMillis() - last
+            if (gap > 30 * 60_000L) AppLog.w(TAG, "TunnelLock was not running for ${gap / 3_600_000} h ${gap / 60_000 % 60} min")
+        }
+        store.markAlive()
         scope.launch { Policy.ensurePolicies(this@TunnelVpnService) }
         scope.launch { for (command in commands) handle(command) }
         ContextCompat.registerReceiver(
@@ -250,6 +305,7 @@ class TunnelVpnService : VpnService() {
             while (true) {
                 delay(BATTERY_SAMPLE_MS)
                 sampleBattery("battery")
+                store.markAlive()
             }
         }
         // New versions: looked for every 12 hours (TunnelLock itself is outside the tunnel).
@@ -264,6 +320,9 @@ class TunnelVpnService : VpnService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startInForeground()
+        intent?.getStringExtra(EXTRA_REASON)?.let { reason ->
+            AppLog.i(TAG, "${if (intent.action == ACTION_DISCONNECT) "disconnect" else "connect"}: $reason")
+        }
         val command = when (intent?.action) {
             ACTION_CONNECT -> Command.Connect
             ACTION_DISCONNECT -> Command.Disconnect
@@ -276,6 +335,7 @@ class TunnelVpnService : VpnService() {
     }
 
     override fun onRevoke() {
+        AppLog.w(TAG, "the VPN was revoked (another VPN app in the secure space, or turned off in Android's settings)")
         commands.trySend(Command.Revoke)
     }
 
@@ -322,6 +382,7 @@ class TunnelVpnService : VpnService() {
                 enterGuard(pause = store.pauseWhenDisconnected.value)
             }
             Command.NetworkChanged -> if (phase == Phase.CONNECTED || phase == Phase.RECONNECTING) {
+                AppLog.i(TAG, "reconnecting: the network changed")
                 if (openVpn.running) {
                     // OpenVPN moves its connection itself (or reconnects).
                     openVpn.networkChanged()
@@ -333,8 +394,14 @@ class TunnelVpnService : VpnService() {
             Command.Revoke -> {
                 stopSession()
                 closeTun()
-                setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_revoked)) }
-                stopSelf()
+                if (VpnService.prepare(this) == null) {
+                    // Still allowed (as the secure space's always-on VPN): guard again rather than stop.
+                    AppLog.i(TAG, "still the VPN of the secure space: guarding again")
+                    enterGuard(getString(R.string.error_revoked), pause = store.pauseWhenDisconnected.value)
+                } else {
+                    setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_revoked)) }
+                    stopSelf()
+                }
             }
         }
     }
@@ -470,7 +537,9 @@ class TunnelVpnService : VpnService() {
                 backoff = 1_000L
                 var misses = 0
                 while (misses < 2) {
-                    delay(CHECK_INTERVAL_MS)
+                    // With the screen off (and battery saving on) every minute; the screen
+                    // coming on checks at once.
+                    withTimeoutOrNull(checkInterval()) { checkNow.receive() }
                     misses = if (checkConnectivity()) 0 else misses + 1
                     if (misses == 0) refreshSubscriptionsIfDue()
                 }
@@ -682,6 +751,11 @@ class TunnelVpnService : VpnService() {
         }
     }
 
+    private fun checkInterval(): Long {
+        val screenOn = getSystemService(PowerManager::class.java).isInteractive
+        return if (screenOn || !store.batterySaving.value) CHECK_INTERVAL_MS else CHECK_INTERVAL_SCREEN_OFF_MS
+    }
+
     private fun checkConnectivity(): Boolean {
         healthChecks.incrementAndGet()
         val ok = TEST_URLS.any { XrayCore.measureDelay(it) >= 0 }
@@ -754,10 +828,10 @@ class TunnelVpnService : VpnService() {
         val current = tun
         if (current != null && !fresh && excluded == tunExcluded) return current.fd
         val builder = baseBuilder(MTU, excluded)
-            .addAddress("172.19.0.1", 30)
+            .addAddress(TUN_IPV4, 30)
             .addRoute("0.0.0.0", 0)
             // IPv6 is routed into the tunnel too, so it can never bypass it.
-            .addAddress("fdfe:dcba:9876::1", 126)
+            .addAddress(TUN_IPV6, 126)
             .addRoute("::", 0)
             .addDnsServer("1.1.1.1")
         val created = establish(builder) ?: return current?.fd
@@ -781,9 +855,9 @@ class TunnelVpnService : VpnService() {
         // A reconnect asking for the same interface gets the one we have.
         if (current != null && openVpnTun == request && excluded == tunExcluded) return current
         val builder = baseBuilder(request.mtu.coerceIn(576, 9000), excluded)
-            .addAddress(request.ipv4 ?: "172.19.0.1", if (request.ipv4 != null) request.ipv4Prefix.coerceIn(1, 32) else 30)
+            .addAddress(request.ipv4 ?: TUN_IPV4, if (request.ipv4 != null) request.ipv4Prefix.coerceIn(1, 32) else 30)
             .addRoute("0.0.0.0", 0)
-            .addAddress(request.ipv6 ?: "fdfe:dcba:9876::1", if (request.ipv6 != null) request.ipv6Prefix.coerceIn(1, 128) else 126)
+            .addAddress(request.ipv6 ?: TUN_IPV6, if (request.ipv6 != null) request.ipv6Prefix.coerceIn(1, 128) else 126)
             .addRoute("::", 0)
         for (dns in request.dns.ifEmpty { listOf("1.1.1.1") }) runCatching { builder.addDnsServer(dns) }
         request.domain?.let { domain -> runCatching { builder.addSearchDomain(domain) } }

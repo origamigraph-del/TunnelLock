@@ -55,7 +55,8 @@ object Notifications {
             context,
             1,
             Intent(context, TunnelVpnService::class.java)
-                .setAction(if (active) TunnelVpnService.ACTION_DISCONNECT else TunnelVpnService.ACTION_CONNECT),
+                .setAction(if (active) TunnelVpnService.ACTION_DISCONNECT else TunnelVpnService.ACTION_CONNECT)
+                .putExtra(TunnelVpnService.EXTRA_REASON, "the notification button"),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(context, CHANNEL)

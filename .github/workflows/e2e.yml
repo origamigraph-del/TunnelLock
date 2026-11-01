@@ -13,11 +13,11 @@ permissions:
   contents: read
 
 env:
-  XRAY_LIB_VERSION: v26.10.21
-  XRAY_LIB_SHA256: e56ec3b06485fe7b37af26948673951edf719c50d6bbc618b8539045952adde4
+  XRAY_LIB_VERSION: v26.10.31
+  XRAY_LIB_SHA256: 2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6
   NDK_VERSION: 27.2.12479018
   # The Xray server: the same core version as the app's library.
-  XRAY_SERVER_MODULE: github.com/xtls/xray-core/main@v1.260327.1-0.20261021115930-1b1647cd9ddf
+  XRAY_SERVER_MODULE: github.com/xtls/xray-core/main@v1.260327.1-0.20261031132019-a4a3dff5b20c
 
 jobs:
   e2e:

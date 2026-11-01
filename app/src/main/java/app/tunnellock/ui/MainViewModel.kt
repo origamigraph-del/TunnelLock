@@ -85,7 +85,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleConnection() {
         val action = if (status.value.phase.isActive) TunnelVpnService.ACTION_DISCONNECT else TunnelVpnService.ACTION_CONNECT
-        TunnelVpnService.send(app, action)
+        TunnelVpnService.send(app, action, "the user tapped the button")
     }
 
     fun ensureGuard() {
@@ -187,7 +187,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             say(R.string.msg_login_saved, request.server.name)
             // A running connection picks up the new login by reconnecting.
             if (store.selectedId.value == request.server.id && status.value.phase.isActive) {
-                TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+                TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT, "the server's login changed")
             }
         }
     }
@@ -237,7 +237,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         say(R.string.msg_ssh_saved, saved.name)
         AppLog.i("Servers", "SSH server saved (${form.transport})")
         // A running connection to this server picks up the change by reconnecting.
-        if (store.selectedId.value == saved.id && status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+        if (store.selectedId.value == saved.id && status.value.phase.isActive) {
+            TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT, "the SSH server was edited")
+        }
     }
 
     fun dismissLogin() {
@@ -248,7 +250,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val changed = store.selectedId.value != server.id
         store.select(server.id)
         // Switching servers while connected reconnects to the new one.
-        if (changed && status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+        if (changed && status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT, "another server was selected")
     }
 
     fun delete(server: StoredServer) = store.removeServer(server.id)
@@ -362,7 +364,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         AppLog.i("Apps", if (server == null) "one app back on the main server" else "one app on its own server")
         refreshProtectedApps()
         // A running connection picks up the new routes by reconnecting.
-        if (status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+        if (status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT, "an app's own server changed")
     }
 
     fun removeApp(context: Context, item: ProtectedApp) {
@@ -392,6 +394,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setPauseWhenDisconnected(enabled: Boolean) = store.setPauseWhenDisconnected(enabled)
 
     fun setFailover(enabled: Boolean) = store.setFailover(enabled)
+
+    fun setBatterySaving(enabled: Boolean) = store.setBatterySaving(enabled)
 
     fun setAutoUpdateSubscriptions(enabled: Boolean) {
         store.setAutoUpdateSubscriptions(enabled)

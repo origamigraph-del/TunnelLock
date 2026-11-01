@@ -205,6 +205,33 @@ else
     fail "Precise: steady" "breaks while connected: $(echo "$long_breaks" | head -3 | cut -d' ' -f3- | tr '\n' ' ')"
 fi
 
+# The interface has TunnelLock's own address, not sing-box's default (Hiddify, NekoBox).
+if sh_ ip -o addr show | grep -q "10.233.97.1/30"; then
+    pass "Own tunnel address" "10.233.97.1/30, no clash with VPN apps in the personal profile"
+else
+    fail "Own tunnel address" "$(sh_ ip -o addr show | grep -E 'tun' | cut -c1-120 | tr '\n' ' ')"
+fi
+if applog | grep -q "W/TunnelVpn: network: \|I/TunnelVpn: network: "; then
+    pass "Network logged" "$(applog | grep -m1 'TunnelVpn: network: ' | cut -d' ' -f3- | cut -c1-100)"
+else
+    fail "Network logged" "no network line in TunnelLock's log"
+fi
+
+# Battery saving: with the screen off the connection is checked every minute, not every 15 s.
+sh_ input keyevent KEYCODE_SLEEP
+sleep 2
+from=$(applines)
+sleep 62
+sh_ input keyevent KEYCODE_WAKEUP
+sh_ wm dismiss-keyguard >/dev/null 2>&1
+sleep 4
+checks=$(applog | tail -n +"$((from + 1))" | grep "I/Battery: screen on" | tail -1 | grep -oE '[0-9]+ checks' | grep -oE '^[0-9]+')
+if [ -n "$checks" ] && [ "$checks" -le 2 ]; then
+    pass "Battery saving" "$checks connection checks in a minute with the screen off (every 15 s it would be 4)"
+else
+    fail "Battery saving" "checks with the screen off: ${checks:-no sample} $(applog | tail -n +"$((from + 1))" | grep 'Battery' | tail -2 | cut -c1-120 | tr '\n' ' ')"
+fi
+
 # ---- 1b. the server stalls for 5 s: too short for TunnelLock's 15 s check ---------------
 
 m=$(mark)

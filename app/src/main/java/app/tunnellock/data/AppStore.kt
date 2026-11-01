@@ -91,6 +91,13 @@ class AppStore(context: Context) {
     private val _appServers = MutableStateFlow(readAppServers())
     val appServers: StateFlow<Map<String, AppServer>> = _appServers
 
+    /**
+     * With the screen off, check the connection every minute instead of every 15 seconds:
+     * each check wakes the radio. On by default (the battery log showed it matters).
+     */
+    private val _batterySaving = MutableStateFlow(prefs.getBoolean(KEY_BATTERY_SAVING, true))
+    val batterySaving: StateFlow<Boolean> = _batterySaving
+
     /** Refresh subscriptions older than 12 hours in the background. Off by default. */
     private val _autoUpdateSubscriptions = MutableStateFlow(prefs.getBoolean(KEY_AUTO_UPDATE_SUBSCRIPTIONS, false))
     val autoUpdateSubscriptions: StateFlow<Boolean> = _autoUpdateSubscriptions
@@ -233,6 +240,16 @@ class AppStore(context: Context) {
         _failover.value = enabled
         prefs.edit().putBoolean(KEY_FAILOVER, enabled).apply()
     }
+
+    fun setBatterySaving(enabled: Boolean) {
+        _batterySaving.value = enabled
+        prefs.edit().putBoolean(KEY_BATTERY_SAVING, enabled).apply()
+    }
+
+    /** When the tunnel service last showed it was running (to find gaps in the log). */
+    fun lastAlive(): Long = prefs.getLong(KEY_LAST_ALIVE, 0)
+
+    fun markAlive() = prefs.edit().putLong(KEY_LAST_ALIVE, System.currentTimeMillis()).apply()
 
     fun setAutoUpdateSubscriptions(enabled: Boolean) {
         _autoUpdateSubscriptions.value = enabled
@@ -394,6 +411,8 @@ class AppStore(context: Context) {
         const val KEY_FAILOVER = "failover"
         const val KEY_AUTO_UPDATE_SUBSCRIPTIONS = "autoUpdateSubscriptions"
         const val KEY_APP_SERVERS = "appServers"
+        const val KEY_BATTERY_SAVING = "batterySaving"
+        const val KEY_LAST_ALIVE = "lastAlive"
         const val KEY_SSH_HOST_KEYS_PREFIX = "sshHostKey:"
     }
 }
