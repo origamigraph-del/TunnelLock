@@ -326,7 +326,7 @@ m=$(mark); sleep 25; check_online "Own server back" "$m"
 
 # ---- 5c. SSH: in TLS, over WebSocket and plain; down, wrong password, changed host key ---
 
-ssh_lines() { sudo wc -l <"$OUT/sshd.log" 2>/dev/null || echo 0; }
+ssh_lines() { sudo wc -l "$OUT/sshd.log" 2>/dev/null | awk '{print $1}' | grep . || echo 0; }
 ssh_forwards() { sudo tail -n +"$(($1 + 1))" "$OUT/sshd.log" 2>/dev/null | grep -c "direct_tcpip.*ipify" || true; }
 ssh_why() { applog | tail -n +"$(($1 + 1))" | grep -E "SSH|TunnelVpn" | tail -3 | cut -c1-160 | tr '\n' ' '; }
 

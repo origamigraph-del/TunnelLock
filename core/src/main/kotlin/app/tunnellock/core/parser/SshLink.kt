@@ -73,6 +73,14 @@ object SshLink {
         return "ssh://${encode(username.trim())}@$address:$port?$query#${encode(name.trim())}"
     }
 
+    /**
+     * Which remembered host key belongs to a server: everything that decides where the
+     * connection ends up, so accounts behind the same CDN address do not share one.
+     */
+    fun hostKeyId(p: ServerProfile): String =
+        listOf("${p.address}:${p.port}", p.stream.network, p.stream.sni.orEmpty(), p.stream.host.orEmpty(), p.stream.path.orEmpty())
+            .joinToString("|")
+
     /** SimpleUri wants a port; SSH has a default one. */
     private fun withPort(link: String): String {
         val rest = link.substring("ssh://".length)

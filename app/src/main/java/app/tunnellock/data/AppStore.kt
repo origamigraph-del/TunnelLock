@@ -1,9 +1,11 @@
 package app.tunnellock.data
 
 import android.content.Context
+import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
 import app.tunnellock.core.parser.LinkParser
 import app.tunnellock.core.parser.ParsedServer
+import app.tunnellock.core.parser.SshLink
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
@@ -150,6 +152,9 @@ class AppStore(context: Context) {
     @Synchronized
     fun saveSsh(link: String, name: String, address: String, login: StoredServer, replaceId: String? = null): StoredServer {
         val existing = replaceId?.let { id -> _servers.value.find { it.id == id } }
+        // Edited or added again: the next connection learns the server's key anew.
+        existing?.let { forgetSshHostKey(it.link) }
+        forgetSshHostKey(link)
         val server = (existing ?: StoredServer(UUID.randomUUID().toString(), name, link, "SSH", address)).copy(
             name = name,
             link = link,
@@ -165,10 +170,15 @@ class AppStore(context: Context) {
         return server
     }
 
-    /** SSH host keys seen on the first connection, by "host:port". */
+    /** SSH host keys seen on the first connection, by [SshLink.hostKeyId]. */
     fun sshHostKey(server: String): String? = prefs.getString(KEY_SSH_HOST_KEYS_PREFIX + server, null)
 
     fun setSshHostKey(server: String, fingerprint: String) = prefs.edit().putString(KEY_SSH_HOST_KEYS_PREFIX + server, fingerprint).apply()
+
+    private fun forgetSshHostKey(link: String) {
+        val profile = runCatching { LinkParser.parse(link) }.getOrNull()?.takeIf { it.protocol == Protocol.SSH } ?: return
+        prefs.edit().remove(KEY_SSH_HOST_KEYS_PREFIX + SshLink.hostKeyId(profile)).apply()
+    }
 
     @Synchronized
     fun setLogin(id: String, username: String?, password: String?, keyPassword: String?) {
@@ -189,6 +199,7 @@ class AppStore(context: Context) {
 
     @Synchronized
     fun removeServer(id: String) {
+        _servers.value.find { it.id == id }?.let { forgetSshHostKey(it.link) }
         saveServers(_servers.value.filter { it.id != id })
     }
 
