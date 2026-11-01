@@ -6,12 +6,17 @@
 #   e2e/servers.sh start|stop xray       VLESS (Xray) on port 10086, no TLS
 #   e2e/servers.sh start|stop xray-b     a second one on port 10087 (an app's own server)
 #   e2e/servers.sh start|stop openvpn    OpenVPN on UDP 1194, login e2e / $OVPN_PASSWORD
+#   e2e/servers.sh start|stop ssh        SSH (user e2essh / $SSH_PASSWORD) on 2222, in TLS on 2443,
+#                                        over WebSocket (GET /ssh) on 2280
+#   e2e/servers.sh new-hostkeys ssh      restart SSH with new host keys (a different server)
 #
 # Client configs end up in e2e/out: xray.link, xray-b.link and client.ovpn.
 set -euo pipefail
 
 OUT=$(cd "$(dirname "$0")" && pwd)/out
+E2E=$(cd "$(dirname "$0")" && pwd)
 OVPN_PASSWORD=${OVPN_PASSWORD:-e2e-secret-7}
+SSH_PASSWORD=${SSH_PASSWORD:-e2e-ssh-pass-9}
 mkdir -p "$OUT"
 
 # Runs a command quietly; on failure shows its output as an annotation and stops.
@@ -66,6 +71,64 @@ start_openvpn() {
 stop_openvpn() {
     [ -f "$OUT/openvpn.pid" ] && sudo kill "$(sudo cat "$OUT/openvpn.pid")" 2>/dev/null || true
     sudo rm -f "$OUT/openvpn.pid"
+}
+
+ssh_host_keys() {
+    rm -rf "$OUT/ssh-keys"
+    mkdir -p "$OUT/ssh-keys"
+    for type in ecdsa rsa ed25519; do ssh-keygen -q -t "$type" -N "" -f "$OUT/ssh-keys/ssh_host_${type}_key"; done
+}
+
+start_ssh() {
+    sudo mkdir -p /run/sshd
+    quiet "SSH server start" sudo /usr/sbin/sshd -f "$OUT/sshd_config" -E "$OUT/sshd.log"
+    # In TLS (stunnel-style) and behind an HTTP upgrade (SSH over WebSocket).
+    nohup socat "OPENSSL-LISTEN:2443,cert=$OUT/ssh-tls.pem,verify=0,reuseaddr,fork" TCP:127.0.0.1:2222 >>"$OUT/socat.log" 2>&1 &
+    echo $! >"$OUT/socat.pid"
+    nohup python3 "$E2E/ws-ssh.py" 2280 2222 >>"$OUT/ws-ssh.log" 2>&1 &
+    echo $! >"$OUT/ws-ssh.pid"
+    sleep 1
+}
+
+stop_ssh() {
+    [ -f "$OUT/sshd.pid" ] && sudo kill "$(sudo cat "$OUT/sshd.pid")" 2>/dev/null || true
+    # Open sessions run in their own processes: end them too, as a server going down would.
+    sudo pkill -f "sshd: e2essh" 2>/dev/null || true
+    sudo pkill -f "sshd-session: e2essh" 2>/dev/null || true
+    sudo pkill -u e2essh 2>/dev/null || true
+    for name in socat ws-ssh; do
+        [ -f "$OUT/$name.pid" ] && kill "$(cat "$OUT/$name.pid")" 2>/dev/null || true
+        rm -f "$OUT/$name.pid"
+    done
+    pkill -f "socat OPENSSL-LISTEN:2443" 2>/dev/null || true
+    sleep 1
+}
+
+setup_ssh() {
+    quiet "SSH tools install" sudo apt-get install -y -qq openssh-server socat
+    id e2essh >/dev/null 2>&1 || quiet "SSH user" sudo useradd -m -s /usr/sbin/nologin e2essh
+    echo "e2essh:$SSH_PASSWORD" | sudo chpasswd || { echo "::error title=SSH user::chpasswd failed"; exit 1; }
+    ssh_host_keys
+    cat >"$OUT/sshd_config" <<EOF
+Port 2222
+ListenAddress 0.0.0.0
+HostKey $OUT/ssh-keys/ssh_host_ecdsa_key
+HostKey $OUT/ssh-keys/ssh_host_rsa_key
+HostKey $OUT/ssh-keys/ssh_host_ed25519_key
+PidFile $OUT/sshd.pid
+PasswordAuthentication yes
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+UsePAM yes
+AllowTcpForwarding yes
+X11Forwarding no
+PermitTTY no
+LogLevel DEBUG1
+EOF
+    quiet "SSH TLS certificate" openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj "/CN=ssh.e2e.test" \
+        -keyout "$OUT/ssh-tls.key" -out "$OUT/ssh-tls.crt"
+    cat "$OUT/ssh-tls.key" "$OUT/ssh-tls.crt" >"$OUT/ssh-tls.pem"
+    start_ssh
 }
 
 setup() {
@@ -133,7 +196,8 @@ EOF
         echo "</ca>"
     } >"$OUT/client.ovpn"
     start_openvpn
-    echo "::notice title=Test servers::Xray on 10086/tcp and 10087/tcp, OpenVPN on 1194/udp are running"
+    setup_ssh
+    echo "::notice title=Test servers::Xray on 10086/tcp and 10087/tcp, OpenVPN on 1194/udp, SSH on 2222/2443/2280 are running"
 }
 
 case "${1:-} ${2:-}" in
@@ -144,5 +208,8 @@ case "${1:-} ${2:-}" in
     "stop xray-b") stop_xray xray-b ;;
     "start openvpn") start_openvpn ;;
     "stop openvpn") stop_openvpn ;;
-    *) echo "usage: $0 setup | start|stop xray|xray-b|openvpn" >&2; exit 2 ;;
+    "start ssh") start_ssh ;;
+    "stop ssh") stop_ssh ;;
+    "new-hostkeys ssh") stop_ssh; ssh_host_keys; start_ssh ;;
+    *) echo "usage: $0 setup | start|stop xray|xray-b|openvpn|ssh | new-hostkeys ssh" >&2; exit 2 ;;
 esac

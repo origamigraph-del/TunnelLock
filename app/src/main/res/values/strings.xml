@@ -198,6 +198,9 @@
     <string name="error_openvpn_login">سرور OpenVPN نام کاربری یا رمز را نپذیرفت. از بخش سرورها «ورود» را ویرایش کنید.</string>
     <string name="error_openvpn_stopped">OpenVPN متوقف شد: %1$s</string>
     <string name="error_own_server_unprotected">قفل VPN اندروید (lockdown) خاموش است، پس اپ‌هایی که سرور جدا دارند با این سرور اصلی محافظت نمی‌شوند. وصل نشد؛ در تنظیمات «اعمال دوباره قوانین فضای امن» را بزنید.</string>
+    <string name="error_ssh_login">سرور SSH نام کاربری، رمز یا کلید را نپذیرفت. از بخش سرورها ویرایش کنید.</string>
+    <string name="error_ssh_hostkey">کلید سرور SSH عوض شده: سرور دیگری جواب داده (ممکن است کسی وسط راه باشد). وصل نشد. اگر خودتان سرور را عوض کرده‌اید، سرور را حذف و دوباره اضافه کنید.</string>
+    <string name="error_ssh_start">SSH وصل نشد: %1$s</string>
     <string name="error_openvpn_stuck">سرور جواب داد ولی اتصال وسط راه گیر کرد. معمولاً یعنی اینترنت شما OpenVPN را فیلتر می‌کند؛ سرور V2Ray را امتحان کنید.</string>
     <string name="error_openvpn_no_answer">سرور OpenVPN هیچ جوابی نمی‌دهد: آدرس، پورت یا کلید کانفیگ اشتباه است، سرور خاموش است یا مسدود شده.</string>
     <string name="servers_ovpn_file">فایل OpenVPN</string>
@@ -247,4 +250,22 @@
     <string name="settings_updates_checked">آخرین بررسی: %1$s</string>
     <string name="msg_update_checked">بررسی شد.</string>
     <string name="msg_update_failed">بررسی نشد: %1$s</string>
+    <string name="servers_ssh">سرور SSH</string>
+    <string name="ssh_title">سرور SSH</string>
+    <string name="ssh_hint">TunnelLock خودش به SSH وصل می‌شود و ترافیک اپ‌ها را از آن رد می‌کند. SSH فقط TCP را می‌برد: تماس صوتی و تصویری که UDP لازم دارند ممکن است کار نکنند (بیشتر اپ‌ها خودشان به TCP برمی‌گردند).</string>
+    <string name="ssh_host">آدرس سرور</string>
+    <string name="ssh_port">پورت</string>
+    <string name="ssh_key">کلید خصوصی (اختیاری، به جای رمز یا کنار آن)</string>
+    <string name="ssh_key_passphrase">رمز کلید (اگر دارد)</string>
+    <string name="ssh_transport">نوع اتصال</string>
+    <string name="ssh_transport_tcp">مستقیم</string>
+    <string name="ssh_transport_tls">TLS/SSL</string>
+    <string name="ssh_transport_ws">WebSocket</string>
+    <string name="ssh_transport_wss">WebSocket + TLS</string>
+    <string name="ssh_sni">SNI</string>
+    <string name="ssh_ws_host">Host (برای WebSocket)</string>
+    <string name="ssh_ws_path">مسیر (path)</string>
+    <string name="ssh_hostkey">اثر انگشت کلید سرور، اختیاری (SHA256:...). اگر خالی بماند، اولین بار به خاطر سپرده می‌شود.</string>
+    <string name="msg_ssh_saved">سرور SSH «%1$s» ذخیره شد.</string>
+    <string name="msg_ssh_invalid">پورت باید عددی بین ۱ تا ۶۵۵۳۵ باشد.</string>
 </resources>

@@ -150,6 +150,18 @@ class TunnelVpnService : VpnService() {
     }
     private val openVpn by lazy { OpenVpnEngine(this, openVpnHost) }
 
+    private val ssh by lazy {
+        SshTunnel(
+            object : SshTunnel.HostKeys {
+                override fun get(server: String) = store.sshHostKey(server)
+                override fun put(server: String, fingerprint: String) = store.setSshHostKey(server, fingerprint)
+            },
+        ) { problem ->
+            // Found while reconnecting: the apps stay cut off; the user sees why.
+            setStatus { if (it.phase == Phase.CONNECTED || it.phase == Phase.RECONNECTING) it.copy(error = sshError(problem)) else it }
+        }
+    }
+
     private val batteryLog by lazy { BatteryLog(this) }
 
     /** Health checks since the last battery sample (each one wakes the radio). */
@@ -345,6 +357,10 @@ class TunnelVpnService : VpnService() {
             enterGuard(getString(R.string.error_own_server_unprotected), pauseOnFailure)
             return
         }
+        if (profile.protocol == Protocol.SSH) {
+            startSshSession(server, profile, cutOff, mode, pauseOnFailure)
+            return
+        }
         if (profile.protocol == Protocol.OPENVPN) {
             if (ensureTun() == null) {
                 setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
@@ -363,10 +379,62 @@ class TunnelVpnService : VpnService() {
         session = scope.launch { runSession(server, config, fd, mode, pauseOnFailure) }
     }
 
+    /**
+     * An SSH server: TunnelLock's SSH connection serves a local proxy and Xray, as for any
+     * server, reads the interface and sends everything to that proxy.
+     */
+    private fun startSshSession(server: StoredServer, profile: ServerProfile, cutOff: Set<String>, mode: SessionMode, pauseOnFailure: Boolean) {
+        val fd = ensureTun(fresh = openVpnTun != null, excluded = cutOff)
+        if (fd == null) {
+            setStatus { it.copy(phase = Phase.OFF, connectedSince = null, error = getString(R.string.error_vpn_permission)) }
+            return
+        }
+        val login = SshLogin(
+            username = server.username ?: profile.username.orEmpty(),
+            password = server.password ?: profile.secret.ifEmpty { null },
+            privateKey = server.privateKey,
+            keyPassphrase = server.keyPassword,
+        )
+        val bridge = try {
+            ssh.start(profile, login)
+        } catch (e: Exception) {
+            AppLog.w(TAG, "SSH proxy did not start", e)
+            enterGuard(getString(R.string.error_ssh_start, e.message.orEmpty()), pauseOnFailure)
+            return
+        }
+        val socks = ServerProfile(server.name, Protocol.SOCKS, "127.0.0.1", bridge.port, secret = bridge.password, username = bridge.user)
+        val config = xrayConfig(socks, log = true)
+        session = scope.launch {
+            if (mode == SessionMode.NETWORK) {
+                markDropped(server.name)
+            } else {
+                setStatus { it.copy(phase = Phase.CONNECTING, serverName = server.name, connectedSince = null, error = null) }
+            }
+            // A wrong login or a changed host key will not fix itself: say so at once.
+            when (val problem = runCatching { ssh.connect() }.exceptionOrNull()) {
+                is SshTunnel.LoginException, is SshTunnel.HostKeyException -> {
+                    ssh.stop()
+                    enterGuard(sshError(problem as java.io.IOException), pauseOnFailure)
+                    return@launch
+                }
+                null -> Unit
+                else -> AppLog.w(TAG, "SSH: ${problem.message}; trying on")
+            }
+            runSession(server, config, fd, mode, pauseOnFailure)
+        }
+    }
+
+    private fun sshError(problem: java.io.IOException): String = when (problem) {
+        is SshTunnel.LoginException -> getString(R.string.error_ssh_login)
+        is SshTunnel.HostKeyException -> getString(R.string.error_ssh_hostkey)
+        else -> getString(R.string.error_ssh_start, problem.message.orEmpty())
+    }
+
     private suspend fun stopSession() {
         session?.cancelAndJoin()
         session = null
         XrayCore.stop()
+        ssh.stop()
         openVpn.stop()
         openVpnEvents = null
     }
@@ -501,7 +569,7 @@ class TunnelVpnService : VpnService() {
      * connection's app. Otherwise those apps are cut off.
      */
     private fun routesPossible(main: ServerProfile): Boolean =
-        Build.VERSION.SDK_INT >= 29 && XrayConfigBuilder.canCarryAppRoutes(main)
+        Build.VERSION.SDK_INT >= 29 && (main.protocol == Protocol.SSH || XrayConfigBuilder.canCarryAppRoutes(main))
 
     /** Apps with their own server, grouped by server. Empty when every app uses the main server. */
     private fun appRoutes(): List<AppRoute> {

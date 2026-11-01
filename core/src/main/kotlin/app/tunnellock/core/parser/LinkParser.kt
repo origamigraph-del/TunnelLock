@@ -34,6 +34,7 @@ object LinkParser {
             "trojan" -> parseTrojan(input)
             "ss" -> parseShadowsocks(input)
             "hysteria2", "hy2" -> parseHysteria2(input)
+            "ssh" -> SshLink.parse(input)
             "" -> throw ParseException("Not a link")
             else -> throw ParseException("Unsupported link type: $scheme")
         }

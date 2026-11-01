@@ -20,10 +20,13 @@ data class StoredServer(
     val subscriptionId: String? = null,
     /** null = not tested, -1 = test failed. */
     val latencyMs: Long? = null,
-    /** OpenVPN login, entered by the user (never part of the config). */
+    /** OpenVPN and SSH login, entered by the user (never part of the config or link). */
     val username: String? = null,
     val password: String? = null,
+    /** OpenVPN: the private key's password. SSH: the passphrase of [privateKey]. */
     val keyPassword: String? = null,
+    /** SSH: a private key (OpenSSH or PEM text), when the account uses one. */
+    val privateKey: String? = null,
 )
 
 data class Subscription(
@@ -142,6 +145,30 @@ class AppStore(context: Context) {
         if (_selectedId.value == null || _servers.value.none { it.id == _selectedId.value }) select(server.id)
         return server
     }
+
+    /** Adds an SSH server entered in the form, or replaces server [replaceId] with it. */
+    @Synchronized
+    fun saveSsh(link: String, name: String, address: String, login: StoredServer, replaceId: String? = null): StoredServer {
+        val existing = replaceId?.let { id -> _servers.value.find { it.id == id } }
+        val server = (existing ?: StoredServer(UUID.randomUUID().toString(), name, link, "SSH", address)).copy(
+            name = name,
+            link = link,
+            protocol = "SSH",
+            address = address,
+            username = login.username?.takeIf { it.isNotEmpty() },
+            password = login.password?.takeIf { it.isNotEmpty() },
+            keyPassword = login.keyPassword?.takeIf { it.isNotEmpty() },
+            privateKey = login.privateKey?.takeIf { it.isNotBlank() },
+        )
+        saveServers(if (existing != null) _servers.value.map { if (it.id == existing.id) server else it } else _servers.value + server)
+        if (_selectedId.value == null || _servers.value.none { it.id == _selectedId.value }) select(server.id)
+        return server
+    }
+
+    /** SSH host keys seen on the first connection, by "host:port". */
+    fun sshHostKey(server: String): String? = prefs.getString(KEY_SSH_HOST_KEYS_PREFIX + server, null)
+
+    fun setSshHostKey(server: String, fingerprint: String) = prefs.edit().putString(KEY_SSH_HOST_KEYS_PREFIX + server, fingerprint).apply()
 
     @Synchronized
     fun setLogin(id: String, username: String?, password: String?, keyPassword: String?) {
@@ -275,7 +302,8 @@ class AppStore(context: Context) {
                     .putOpt("latencyMs", it.latencyMs)
                     .putOpt("username", it.username)
                     .putOpt("password", it.password)
-                    .putOpt("keyPassword", it.keyPassword),
+                    .putOpt("keyPassword", it.keyPassword)
+                    .putOpt("privateKey", it.privateKey),
             )
         }
         prefs.edit().putString(KEY_SERVERS, array.toString()).apply()
@@ -296,6 +324,7 @@ class AppStore(context: Context) {
                 username = o.optString("username").takeIf { it.isNotEmpty() },
                 password = o.optString("password").takeIf { it.isNotEmpty() },
                 keyPassword = o.optString("keyPassword").takeIf { it.isNotEmpty() },
+                privateKey = o.optString("privateKey").takeIf { it.isNotEmpty() },
             )
         }
     }
@@ -354,5 +383,6 @@ class AppStore(context: Context) {
         const val KEY_FAILOVER = "failover"
         const val KEY_AUTO_UPDATE_SUBSCRIPTIONS = "autoUpdateSubscriptions"
         const val KEY_APP_SERVERS = "appServers"
+        const val KEY_SSH_HOST_KEYS_PREFIX = "sshHostKey:"
     }
 }

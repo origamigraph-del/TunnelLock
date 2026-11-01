@@ -187,6 +187,9 @@
     <string name="error_openvpn_login">The OpenVPN server rejected the username or password. Edit the login in Servers.</string>
     <string name="error_openvpn_stopped">OpenVPN stopped: %1$s</string>
     <string name="error_own_server_unprotected">Android\'s VPN lockdown is off, so apps with their own server would not be protected with this main server. Not connected; tap Re-apply secure space rules in Settings.</string>
+    <string name="error_ssh_login">The SSH server rejected the username, password or key. Edit it in Servers.</string>
+    <string name="error_ssh_hostkey">The SSH server\'s host key changed: a different server answered (someone may be in between). Not connected. If you changed the server yourself, delete it and add it again.</string>
+    <string name="error_ssh_start">SSH did not connect: %1$s</string>
     <string name="error_openvpn_stuck">The server answered, but the connection got stuck halfway. This usually means your internet filters OpenVPN; try a V2Ray server.</string>
     <string name="error_openvpn_no_answer">The OpenVPN server does not answer at all: the config\'s address, port or key is wrong, the server is down, or it is blocked.</string>
     <string name="servers_ovpn_file">OpenVPN file</string>
@@ -236,4 +239,22 @@
     <string name="settings_updates_checked">Last check: %1$s</string>
     <string name="msg_update_checked">Checked.</string>
     <string name="msg_update_failed">Check failed: %1$s</string>
+    <string name="servers_ssh">SSH server</string>
+    <string name="ssh_title">SSH server</string>
+    <string name="ssh_hint">TunnelLock connects to SSH itself and sends the apps\' traffic through it. SSH carries TCP only: voice and video calls that need UDP may not work (most apps fall back to TCP).</string>
+    <string name="ssh_host">Server address</string>
+    <string name="ssh_port">Port</string>
+    <string name="ssh_key">Private key (optional, instead of or with the password)</string>
+    <string name="ssh_key_passphrase">Key passphrase (if any)</string>
+    <string name="ssh_transport">Connection type</string>
+    <string name="ssh_transport_tcp">Direct</string>
+    <string name="ssh_transport_tls">TLS/SSL</string>
+    <string name="ssh_transport_ws">WebSocket</string>
+    <string name="ssh_transport_wss">WebSocket + TLS</string>
+    <string name="ssh_sni">SNI</string>
+    <string name="ssh_ws_host">Host (for WebSocket)</string>
+    <string name="ssh_ws_path">Path</string>
+    <string name="ssh_hostkey">Server key fingerprint, optional (SHA256:...). If empty, the first one seen is remembered.</string>
+    <string name="msg_ssh_saved">SSH server "%1$s" saved.</string>
+    <string name="msg_ssh_invalid">The port must be a number from 1 to 65535.</string>
 </resources>
