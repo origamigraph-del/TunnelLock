@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -27,6 +28,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -46,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +72,7 @@ fun ServersScreen(vm: MainViewModel) {
     val testing by vm.testing.collectAsStateWithLifecycle()
     val updating by vm.updating.collectAsStateWithLifecycle()
     val loginRequest by vm.loginRequest.collectAsStateWithLifecycle()
+    val sshForm by vm.sshForm.collectAsStateWithLifecycle()
 
     var showPaste by remember { mutableStateOf(false) }
     var showSubscription by remember { mutableStateOf(false) }
@@ -113,6 +117,7 @@ fun ServersScreen(vm: MainViewModel) {
             )
             AssistChip(onClick = { showSubscription = true }, label = { Text(stringResource(R.string.servers_subscription)) })
             AssistChip(onClick = { ovpnPicker.launch(arrayOf("*/*")) }, label = { Text(stringResource(R.string.servers_ovpn_file)) })
+            AssistChip(onClick = vm::newSsh, label = { Text(stringResource(R.string.servers_ssh)) })
             AssistChip(
                 onClick = vm::testAll,
                 enabled = !testing && servers.isNotEmpty(),
@@ -156,10 +161,10 @@ fun ServersScreen(vm: MainViewModel) {
                         server = server,
                         selected = server.id == selectedId,
                         onClick = { vm.select(server) },
-                        onEditLogin = if (server.protocol == Protocol.OPENVPN.label) {
-                            { vm.editLogin(server) }
-                        } else {
-                            null
+                        onEditLogin = when (server.protocol) {
+                            Protocol.OPENVPN.label -> { { vm.editLogin(server) } }
+                            Protocol.SSH.label -> { { vm.editSsh(server) } }
+                            else -> null
                         },
                         onDelete = { toDelete = server },
                     )
@@ -179,6 +184,9 @@ fun ServersScreen(vm: MainViewModel) {
             vm.addSubscription(name, url)
             showSubscription = false
         })
+    }
+    sshForm?.let { form ->
+        SshServerDialog(initial = form, onDismiss = vm::dismissSsh, onSave = vm::saveSsh)
     }
     loginRequest?.let { request ->
         OpenVpnLoginDialog(
@@ -429,6 +437,82 @@ private fun OpenVpnLoginDialog(
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+    )
+}
+
+/** An SSH account: address, login, and how the connection reaches the server. */
+@Composable
+private fun SshServerDialog(initial: SshForm, onDismiss: () -> Unit, onSave: (SshForm) -> Unit) {
+    var form by remember(initial) { mutableStateOf(initial) }
+    val transports = listOf(
+        "tcp" to R.string.ssh_transport_tcp,
+        "tls" to R.string.ssh_transport_tls,
+        "ws" to R.string.ssh_transport_ws,
+        "wss" to R.string.ssh_transport_wss,
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.ssh_title)) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.ssh_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Field(form.name, { form = form.copy(name = it) }, stringResource(R.string.dialog_sub_name))
+                Field(form.host, { form = form.copy(host = it.trim()) }, stringResource(R.string.ssh_host), KeyboardType.Uri)
+                Field(form.port, { form = form.copy(port = it.filter(Char::isDigit).take(5)) }, stringResource(R.string.ssh_port), KeyboardType.Number)
+                Field(form.username, { form = form.copy(username = it) }, stringResource(R.string.ovpn_username), KeyboardType.Email)
+                PasswordField(form.password, { form = form.copy(password = it) }, stringResource(R.string.ovpn_password))
+                OutlinedTextField(
+                    value = form.privateKey,
+                    onValueChange = { form = form.copy(privateKey = it) },
+                    label = { Text(stringResource(R.string.ssh_key)) },
+                    minLines = 2,
+                    maxLines = 5,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (form.privateKey.isNotBlank()) {
+                    PasswordField(form.keyPassphrase, { form = form.copy(keyPassphrase = it) }, stringResource(R.string.ssh_key_passphrase))
+                }
+                Text(stringResource(R.string.ssh_transport), style = MaterialTheme.typography.labelLarge)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    transports.forEach { (value, label) ->
+                        FilterChip(
+                            selected = form.transport == value,
+                            onClick = { form = form.copy(transport = value) },
+                            label = { Text(stringResource(label)) },
+                        )
+                    }
+                }
+                if (form.transport == "tls" || form.transport == "wss") {
+                    Field(form.sni, { form = form.copy(sni = it.trim()) }, stringResource(R.string.ssh_sni), KeyboardType.Uri)
+                }
+                if (form.transport == "ws" || form.transport == "wss") {
+                    Field(form.wsHost, { form = form.copy(wsHost = it.trim()) }, stringResource(R.string.ssh_ws_host), KeyboardType.Uri)
+                    Field(form.path, { form = form.copy(path = it.trim()) }, stringResource(R.string.ssh_ws_path), KeyboardType.Uri)
+                }
+                Field(form.hostKey, { form = form.copy(hostKey = it.trim()) }, stringResource(R.string.ssh_hostkey))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(form) }, enabled = form.ready) { Text(stringResource(R.string.dialog_save)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
+    )
+}
+
+@Composable
+private fun Field(value: String, onValueChange: (String) -> Unit, label: String, keyboard: KeyboardType = KeyboardType.Text) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        singleLine = true,
+        label = { Text(label) },
+        keyboardOptions = KeyboardOptions(keyboardType = keyboard),
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 

@@ -8,15 +8,21 @@ enum class Protocol(val label: String) {
     HYSTERIA2("Hysteria2"),
     CUSTOM("Xray JSON"),
     OPENVPN("OpenVPN"),
+
+    /** An SSH account: TunnelLock keeps the SSH connection and Xray sends traffic into it. */
+    SSH("SSH"),
+
+    /** A SOCKS5 proxy. Used inside TunnelLock to hand Xray's traffic to the SSH connection. */
+    SOCKS("SOCKS"),
     ;
 
-    /** Runs on the Xray core (everything except OpenVPN). */
-    val isXray: Boolean get() = this != OPENVPN
+    /** An outbound of the Xray core (OpenVPN and SSH run their own connection). */
+    val isXray: Boolean get() = this != OPENVPN && this != SSH
 }
 
 /** Transport and security settings shared by the V2Ray-family protocols. */
 data class StreamConfig(
-    /** tcp, ws, grpc, httpupgrade, xhttp, kcp, hysteria */
+    /** tcp, ws, grpc, httpupgrade, xhttp, kcp, hysteria. SSH: tcp, tls, ws, wss. */
     val network: String = "tcp",
     /** none, tls, reality */
     val security: String = "none",
@@ -51,8 +57,12 @@ data class ServerProfile(
     val protocol: Protocol,
     val address: String,
     val port: Int,
-    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks, auth for Hysteria2. Unused for OpenVPN. */
+    /** UUID for VLESS/VMess, password for Trojan/Shadowsocks/SSH/SOCKS, auth for Hysteria2. Unused for OpenVPN. */
     val secret: String = "",
+    /** SSH and SOCKS login name. */
+    val username: String? = null,
+    /** SSH: the server's host key fingerprint ("SHA256:..."), when the link pins it. */
+    val hostKey: String? = null,
     /** Shadowsocks cipher, VMess security, or VLESS encryption. */
     val method: String? = null,
     val flow: String? = null,

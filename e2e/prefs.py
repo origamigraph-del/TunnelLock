@@ -7,6 +7,7 @@ usage: prefs.py <xray link file> <client.ovpn> <selected: xray|ovpn> <openvpn pa
                 [<second xray link file> [<package on the second server>]] > tunnellock.xml
 """
 import json
+import os
 import sys
 from xml.sax.saxutils import escape
 
@@ -30,6 +31,18 @@ servers = [
     },
 ]
 
+
+# SSH accounts: plain, in TLS, over WebSocket, and one with a wrong password.
+ssh_password = os.environ.get("SSH_PASSWORD", "e2e-ssh-pass-9")
+for server_id, link, address, login_password in (
+    ("ssh-tcp", "ssh://e2essh@10.0.2.2:2222?transport=tcp#e2e%20SSH", "10.0.2.2:2222", ssh_password),
+    ("ssh-tls", "ssh://e2essh@10.0.2.2:2443?transport=tls&sni=ssh.e2e.test#e2e%20SSH%20TLS", "10.0.2.2:2443", ssh_password),
+    ("ssh-ws", "ssh://e2essh@10.0.2.2:2280?transport=ws&host=ws.e2e.test&path=%2Fssh#e2e%20SSH%20WS", "10.0.2.2:2280", ssh_password),
+    ("ssh-wrong", "ssh://e2essh@10.0.2.2:2222?transport=tcp#e2e%20SSH%20wrong", "10.0.2.2:2222", "not-the-password"),
+):
+    servers.append(
+        {"id": server_id, "name": server_id, "link": link, "protocol": "SSH", "address": address, "username": "e2essh", "password": login_password}
+    )
 
 app_servers = {}
 if xray_b_link:

@@ -72,6 +72,8 @@ android {
     packaging {
         // Compress the Go core (~33 MB per ABI uncompressed).
         jniLibs { useLegacyPackaging = true }
+        // JSch's classes for newer Java versions; Android uses the base ones.
+        resources { excludes += "META-INF/versions/**" }
     }
 }
 
@@ -98,4 +100,6 @@ dependencies {
     implementation(libs.compose.material.icons.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.zxing.android.embedded)
+    // SSH servers (a maintained JSch: modern key exchanges, ciphers and keys).
+    implementation(libs.jsch)
 }

@@ -17,6 +17,7 @@ import app.tunnellock.core.openvpn.OpenVpnConfig
 import app.tunnellock.core.parser.LinkParser
 import app.tunnellock.core.parser.ParseException
 import app.tunnellock.core.parser.ParsedServer
+import app.tunnellock.core.parser.SshLink
 import app.tunnellock.core.xray.CoreOptions
 import app.tunnellock.core.xray.XrayConfigBuilder
 import app.tunnellock.data.AppLog
@@ -60,6 +61,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val testing: StateFlow<Boolean> = _testing
 
     val updating: StateFlow<Set<String>> = SubscriptionUpdater.updating
+
+    private val _sshForm = MutableStateFlow<SshForm?>(null)
+
+    /** The SSH server form while it is open. */
+    val sshForm: StateFlow<SshForm?> = _sshForm
 
     private val _loginRequest = MutableStateFlow<LoginRequest?>(null)
 
@@ -186,6 +192,54 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun newSsh() {
+        _sshForm.value = SshForm()
+    }
+
+    fun editSsh(server: StoredServer) {
+        val p = store.profileOf(server) ?: return
+        _sshForm.value = SshForm(
+            serverId = server.id,
+            name = server.name,
+            host = p.address,
+            port = p.port.toString(),
+            username = server.username ?: p.username.orEmpty(),
+            password = server.password ?: p.secret,
+            privateKey = server.privateKey.orEmpty(),
+            keyPassphrase = server.keyPassword.orEmpty(),
+            transport = p.stream.network,
+            sni = p.stream.sni.orEmpty(),
+            wsHost = p.stream.host.orEmpty(),
+            path = p.stream.path.orEmpty(),
+            hostKey = p.hostKey.orEmpty(),
+        )
+    }
+
+    fun dismissSsh() {
+        _sshForm.value = null
+    }
+
+    fun saveSsh(form: SshForm) {
+        val port = form.port.trim().toIntOrNull()?.takeIf { it in 1..65535 } ?: return say(R.string.msg_ssh_invalid)
+        val host = form.host.trim().removePrefix("[").removeSuffix("]")
+        val name = form.name.trim().ifEmpty { host }
+        val link = runCatching {
+            SshLink.build(name, host, port, form.username, form.transport, form.sni, form.wsHost, form.path, form.hostKey)
+                .also { LinkParser.parse(it) }
+        }.getOrElse { return say(R.string.msg_import_failed, it.message.orEmpty()) }
+        val address = if (host.contains(':')) "[$host]:$port" else "$host:$port"
+        val login = StoredServer(
+            id = "", name = name, link = link, protocol = "SSH", address = address,
+            username = form.username.trim(), password = form.password, keyPassword = form.keyPassphrase, privateKey = form.privateKey,
+        )
+        val saved = store.saveSsh(link, name, address, login, replaceId = form.serverId)
+        _sshForm.value = null
+        say(R.string.msg_ssh_saved, saved.name)
+        AppLog.i("Servers", "SSH server saved (${form.transport})")
+        // A running connection to this server picks up the change by reconnecting.
+        if (store.selectedId.value == saved.id && status.value.phase.isActive) TunnelVpnService.send(app, TunnelVpnService.ACTION_CONNECT)
+    }
+
     fun dismissLogin() {
         _loginRequest.value = null
     }
@@ -212,6 +266,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             profile == null -> -1L
                             // OpenVPN cannot be tested through Xray: a TCP server is at least reachable or not.
                             profile.protocol == Protocol.OPENVPN -> if (profile.method == "tcp") tcpDelay(profile.address, profile.port) else null
+                            // SSH runs outside Xray: the server answering on its port is what can be measured.
+                            profile.protocol == Protocol.SSH -> tcpDelay(profile.address, profile.port)
                             else -> {
                                 val config = XrayConfigBuilder.build(profile, CoreOptions(useTun = false))
                                 XrayCore.testServer(app, config, "https://www.gstatic.com/generate_204")
@@ -354,6 +410,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         Policy.finalizeProfile(app)
         say(if (Policy.isLockdownActive(app)) R.string.msg_lockdown_ok else R.string.msg_lockdown_failed)
     }
+}
+
+/** The SSH server form; [serverId] is set when an existing server is edited. */
+data class SshForm(
+    val serverId: String? = null,
+    val name: String = "",
+    val host: String = "",
+    val port: String = "22",
+    val username: String = "",
+    val password: String = "",
+    val privateKey: String = "",
+    val keyPassphrase: String = "",
+    /** tcp, tls, ws, wss (see SshLink). */
+    val transport: String = "tcp",
+    val sni: String = "",
+    val wsHost: String = "",
+    val path: String = "",
+    val hostKey: String = "",
+) {
+    val ready: Boolean
+        get() = host.isNotBlank() && port.trim().toIntOrNull() in 1..65535 && username.isNotBlank() &&
+            (password.isNotEmpty() || privateKey.isNotBlank())
 }
 
 /** The OpenVPN login dialog: for a new server ([parsed]) or an existing one ([server]). */

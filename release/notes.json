@@ -1,6 +1,6 @@
 {
-  "id": "2026-10-30-update-check",
+  "id": "2026-11-01-ssh",
   "priority": "recommended",
-  "fa": "TunnelLock حالا خودش نسخهٔ جدید را بررسی می‌کند و بر اساس اهمیت (فوری، مهم، پیشنهادی، اختیاری) خبر می‌دهد؛ اگر سرورهای اشتراک شما پروتکلی داشته باشند که این نسخه نمی‌شناسد هم می‌گوید. «هر اپ از سرور خودش» و پیام روشن برای OpenVPN گیرکرده هم در این نسخه است.",
-  "en": "TunnelLock now looks for new versions itself and tells you how important they are (urgent, important, recommended, optional), and when servers in your subscriptions use a protocol this version does not know. Also in this version: each app on its own server, and a clear message when OpenVPN gets stuck."
+  "fa": "پشتیبانی از SSH: سرور SSH با رمز یا کلید، مستقیم، داخل TLS (با SNI) یا از طریق WebSocket (پشت CDN). کلید سرور به خاطر سپرده می‌شود و اگر سرور دیگری جواب بدهد وصل نمی‌شود. SSH فقط TCP را می‌برد.",
+  "en": "SSH support: SSH servers with a password or key, direct, inside TLS (with SNI) or over WebSocket (behind a CDN). The server's key is remembered and a different server is refused. SSH carries TCP only."
 }
