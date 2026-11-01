@@ -390,7 +390,8 @@ if wait_phase GUARDING "$from" 90 && applog | tail -n +"$((from + 1))" | grep -q
 else
     fail "SSH wrong password" "no login error within 90 s: $(ssh_why "$from")"
 fi
-sleep 20
+# The login error comes at once now: wait for a few blocked rounds (each takes up to ~20 s).
+sleep 45
 check_blocked "SSH wrong password blocks" "$m"
 
 # A different server answers on the same address: refused, apps stay blocked.
