@@ -490,6 +490,10 @@ for who in 0 "$U"; do
 done
 
 # Secure-space (user $U) prefs with the fake coordinate, then start its mock service there.
+# Stop both copies first so the secure-space app re-reads the pushed prefs from a clean start.
+sh_ am force-stop --user 0 $APP >/dev/null 2>&1
+sh_ am force-stop --user "$U" $APP >/dev/null 2>&1
+sh_ pm grant --user "$U" $APP android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
 printf '%s' "<?xml version='1.0' encoding='utf-8' standalone='yes' ?><map><string name=\"mockLocation\">35.6892, 51.389</string></map>" >"$OUT/mock.xml"
 adb push "$OUT/mock.xml" /data/local/tmp/mock.xml >/dev/null
 uuid=$(sh_ stat -c %u "$DATA"); uctx=$(sh_ ls -Zd "$DATA" | awk '{print $1}')
@@ -497,8 +501,6 @@ sh_ "mkdir -p $DATA/shared_prefs && cp /data/local/tmp/mock.xml $DATA/shared_pre
     && chown $uuid:$uuid $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml \
     && chmod 771 $DATA/shared_prefs && chmod 660 $DATA/shared_prefs/tunnellock.xml \
     && chcon $uctx $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml"
-sh_ am force-stop --user 0 $APP >/dev/null 2>&1
-sh_ am force-stop --user "$U" $APP >/dev/null 2>&1
 sh_ am start-foreground-service --user "$U" -n $APP/.vpn.MockLocationService >/dev/null 2>&1
 
 # Wait for the secure-space app to accept the mock (its log is in user $U).
@@ -507,6 +509,15 @@ for _ in $(seq 1 15); do
     if applog | grep -q "fake location on: 35.6892"; then mock_ok=yes; break; fi
     sleep 2
 done
+
+# If it did not set, say why: the appop in user $U, whether the service actually runs there,
+# and the prefs the app read. This separates "service never started" from "appop refused".
+sdiag="appop=$(sh_ appops get --user "$U" $APP android:mock_location 2>&1 | tr '\n' ' ' | cut -c1-70)"
+sdiag="$sdiag | svc=$(sh_ dumpsys activity services $APP 2>/dev/null | grep -c MockLocationService)"
+sdiag="$sdiag | prefs=$(sh_ cat "$DATA/shared_prefs/tunnellock.xml" 2>&1 | tr -d '\n' | cut -c1-110)"
+sdiag="$sdiag | applog=$(applog | grep -iE 'location|mock' | tail -2 | tr '\n' '/' | cut -c1-110)"
+echo "::notice title=Secure mock diag::$(printf '%s' "$sdiag" | oneline)"
+
 if [ -n "$mock_ok" ]; then
     pass "Fake location set" "the secure-space TunnelLock feeds 35.6892, 51.389"
 else
