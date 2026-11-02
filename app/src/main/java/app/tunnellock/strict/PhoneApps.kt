@@ -107,6 +107,22 @@ object PhoneApps {
      * Inside the secure space: takes a hand-over left on the clipboard by [send].
      * Returns the apps, or an empty list if the clipboard holds something else.
      */
+    /** Leaves a link for the secure space on the clipboard (the cross-profile forwarder is not reached on Samsung). */
+    fun putLinkOnClipboard(context: Context, url: String) {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        clipboard.setPrimaryClip(ClipData.newPlainText(OpenLinkActivity.CLIPBOARD_LABEL, url))
+    }
+
+    /** Takes a link left by [putLinkOnClipboard] (read only while focused), clearing it. */
+    fun takeLinkFromClipboard(context: Context): String? {
+        val clipboard = context.getSystemService(ClipboardManager::class.java)
+        if (clipboard.primaryClipDescription?.label != OpenLinkActivity.CLIPBOARD_LABEL) return null
+        val url = clipboard.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text?.toString()?.takeIf { it.isNotBlank() } ?: return null
+        runCatching { clipboard.clearPrimaryClip() }
+        AppLog.i(TAG, "took a link from the clipboard hand-over")
+        return url
+    }
+
     fun takeFromClipboard(context: Context): List<CloneTarget> {
         val clipboard = context.getSystemService(ClipboardManager::class.java)
         if (clipboard.primaryClipDescription?.label != CloneActivity.CLIPBOARD_LABEL) return emptyList()

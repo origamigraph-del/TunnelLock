@@ -43,15 +43,21 @@ class ShareLinkActivity : Activity() {
                 activity.startActivity(OpenLinkActivity.intent(url).setClass(activity, OpenLinkActivity::class.java))
                 return
             }
-            val sent = runCatching { SecureSpace.forward(activity, OpenLinkActivity.intent(url)) }.getOrDefault(false)
-            if (sent) {
-                AppLog.i(TAG, "a link was sent to the secure space")
-                Toast.makeText(activity, R.string.open_link_sent, Toast.LENGTH_SHORT).show()
-            } else {
-                AppLog.w(TAG, "no route to the secure space for the link yet")
+            val space = SecureSpace.profile(activity)
+            if (space == null) {
                 Toast.makeText(activity, R.string.open_link_open_space, Toast.LENGTH_LONG).show()
-                SecureSpace.profile(activity)?.let { SecureSpace.open(activity, it) }
+                return
             }
+            // The cross-profile forwarder is not reachable on every phone (Samsung), so fall back to
+            // the clipboard + opening the secure space, the same hand-over that app-copying uses.
+            if (runCatching { SecureSpace.forward(activity, OpenLinkActivity.intent(url)) }.getOrDefault(false)) {
+                AppLog.i(TAG, "a link was sent to the secure space")
+            } else {
+                PhoneApps.putLinkOnClipboard(activity, url)
+                runCatching { SecureSpace.open(activity, space) }
+                AppLog.i(TAG, "a link was handed to the secure space through the clipboard")
+            }
+            Toast.makeText(activity, R.string.open_link_sent, Toast.LENGTH_SHORT).show()
         }
     }
 }
