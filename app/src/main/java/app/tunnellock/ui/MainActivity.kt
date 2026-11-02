@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import app.tunnellock.strict.CloneActivity
+import app.tunnellock.strict.OpenLinkActivity
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
 import app.tunnellock.ui.theme.TunnelLockTheme
@@ -36,6 +37,10 @@ class MainActivity : ComponentActivity() {
         if (hasFocus && inSecureSpace) {
             val targets = PhoneApps.takeFromClipboard(this)
             if (targets.isNotEmpty()) startActivity(CloneActivity.localIntent(this, targets))
+            // A link handed over from the personal side (when the cross-profile forwarder is not reachable).
+            PhoneApps.takeLinkFromClipboard(this)?.let { url ->
+                runCatching { startActivity(OpenLinkActivity.intent(url).setClass(this, OpenLinkActivity::class.java)) }
+            }
         }
     }
 }

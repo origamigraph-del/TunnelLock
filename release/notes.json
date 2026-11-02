@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-02-open-link",
-  "priority": "recommended",
-  "fa": "باز کردن لینک در فضای امن: لینک فعال‌سازی ایمیل را به‌جای زدن، در TunnelLock بیرونی بگذار یا از «اشتراک‌گذاری → باز کردن در فضای امن» بفرست تا نسخهٔ داخل فضای امن اپ بازش کند، نه نسخهٔ عادی (که IP و موقعیت اشتباه می‌داد). همراه با سه‌حالتهٔ موقعیت و جعل provider «fused».",
-  "en": "Open a link in the secure space: instead of tapping an email's activation link, paste it in the outer TunnelLock or use Share → Open in the secure space, so the app's secure-space copy opens it rather than the personal one (which had the wrong IP and location). Also the three location modes and the fused-provider fix."
+  "id": "2026-11-02-link-clipboard",
+  "priority": "important",
+  "fa": "رفع «باز کردن لینک در فضای امن» روی گوشی‌هایی (مثل سامسونگ) که مسیر مستقیم بین‌پروفایلی را قبول نمی‌کنند: حالا لینک از همان راه کلیپ‌بوردی که کپی اپ‌ها استفاده می‌کند تحویل می‌شود و دیگر ارور «اول برنامه را باز کن» نمی‌دهد. ورودی مختصات هم ارقام فارسی را قبول می‌کند.",
+  "en": "Fixes 'open a link in the secure space' on phones (like Samsung) where the direct cross-profile route is not reachable: the link is now handed over via the same clipboard path that app-copying uses, instead of failing with 'open the app first'. The coordinate field also accepts Persian digits."
 }

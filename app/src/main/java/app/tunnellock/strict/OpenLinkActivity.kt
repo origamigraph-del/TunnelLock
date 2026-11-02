@@ -19,6 +19,9 @@ class OpenLinkActivity : Activity() {
     companion object {
         const val ACTION_OPEN_LINK = "app.tunnellock.action.OPEN_LINK"
         const val EXTRA_URL = "url"
+
+        /** Clipboard hand-over label when the cross-profile forwarder is unavailable (Samsung). */
+        const val CLIPBOARD_LABEL = "app.tunnellock.link"
         private const val TAG = "OpenLink"
 
         fun intent(url: String): Intent =
