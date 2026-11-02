@@ -397,6 +397,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setBatterySaving(enabled: Boolean) = store.setBatterySaving(enabled)
 
+    fun setMockLocation(value: String) {
+        store.setMockLocation(value)
+        AppLog.i("Location", if (value.isBlank()) "fake location off" else "fake location set")
+    }
+
     fun setAutoUpdateSubscriptions(enabled: Boolean) {
         store.setAutoUpdateSubscriptions(enabled)
         if (enabled) viewModelScope.launch { SubscriptionUpdater.updateStale(store) }

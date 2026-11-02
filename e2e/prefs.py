@@ -34,6 +34,7 @@ servers = [
 
 # SSH accounts: plain, in TLS, over WebSocket, and one with a wrong password.
 ssh_password = os.environ.get("SSH_PASSWORD", "e2e-ssh-pass-9")
+mock_location = os.environ.get("MOCK_LOCATION", "")
 for server_id, link, address, login_password in (
     ("ssh-tcp", "ssh://e2essh@10.0.2.2:2222?transport=tcp#e2e%20SSH", "10.0.2.2:2222", ssh_password),
     ("ssh-tls", "ssh://e2essh@10.0.2.2:2443?transport=tls&sni=ssh.e2e.test#e2e%20SSH%20TLS", "10.0.2.2:2443", ssh_password),
@@ -64,6 +65,7 @@ sys.stdout.write(
     + string("servers", json.dumps(servers))
     + string("selected", selected)
     + string("appServers", json.dumps(app_servers))
+    + string("mockLocation", mock_location)
     + boolean("autoConnect", True)
     + boolean("pauseWhenDisconnected", True)
     + "</map>\n"

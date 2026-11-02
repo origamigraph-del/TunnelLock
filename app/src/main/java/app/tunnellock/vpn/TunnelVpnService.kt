@@ -18,6 +18,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
+import app.tunnellock.core.geo.CoordinateParser
 import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
 import app.tunnellock.core.openvpn.OpenVpnConfig
@@ -179,6 +180,7 @@ class TunnelVpnService : VpnService() {
     }
 
     private val batteryLog by lazy { BatteryLog(this) }
+    private val mockLocation by lazy { MockLocation(this) }
 
     /** Health checks since the last battery sample (each one wakes the radio). */
     private val healthChecks = AtomicInteger()
@@ -316,6 +318,12 @@ class TunnelVpnService : VpnService() {
                 delay(BATTERY_SAMPLE_MS)
             }
         }
+        // The optional fake location follows its setting while the secure space runs.
+        scope.launch {
+            store.mockLocation.collect { value ->
+                mockLocation.apply(CoordinateParser.parse(value))
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -348,6 +356,7 @@ class TunnelVpnService : VpnService() {
         XrayCore.stop()
         openVpn.kill()
         ssh.stop()
+        mockLocation.stop()
         closeTun()
         // Apps are not paused here: someone may be using one. Lockdown cuts their internet.
         TunnelState.update { it.copy(phase = Phase.OFF, connectedSince = null) }

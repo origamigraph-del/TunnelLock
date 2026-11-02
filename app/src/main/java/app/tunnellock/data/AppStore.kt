@@ -246,6 +246,19 @@ class AppStore(context: Context) {
         prefs.edit().putBoolean(KEY_BATTERY_SAVING, enabled).apply()
     }
 
+    /**
+     * A fake GPS location for the whole secure space (off by default). "lat,lon" when on,
+     * empty when off. Android allows one mock-location app for the device, so this is one
+     * location for every protected app, not a separate one per app.
+     */
+    private val _mockLocation = MutableStateFlow(prefs.getString(KEY_MOCK_LOCATION, "").orEmpty())
+    val mockLocation: StateFlow<String> = _mockLocation
+
+    fun setMockLocation(value: String) {
+        _mockLocation.value = value.trim()
+        prefs.edit().putString(KEY_MOCK_LOCATION, value.trim()).apply()
+    }
+
     /** When the tunnel service last showed it was running (to find gaps in the log). */
     fun lastAlive(): Long = prefs.getLong(KEY_LAST_ALIVE, 0)
 
@@ -413,6 +426,7 @@ class AppStore(context: Context) {
         const val KEY_APP_SERVERS = "appServers"
         const val KEY_BATTERY_SAVING = "batterySaving"
         const val KEY_LAST_ALIVE = "lastAlive"
+        const val KEY_MOCK_LOCATION = "mockLocation"
         const val KEY_SSH_HOST_KEYS_PREFIX = "sshHostKey:"
     }
 }
