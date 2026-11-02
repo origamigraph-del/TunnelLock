@@ -16,10 +16,6 @@ import app.tunnellock.data.AppLog
  */
 class ShareLinkActivity : Activity() {
 
-    private companion object {
-        const val TAG = "OpenLink"
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val url = linkFrom(intent)
@@ -39,6 +35,8 @@ class ShareLinkActivity : Activity() {
     }
 
     companion object {
+        private const val TAG = "OpenLink"
+
         /** Sends [url] to the secure space; from the secure space it opens straight away. */
         fun open(activity: Activity, url: String) {
             if (Policy.isProfileOwner(activity)) {
