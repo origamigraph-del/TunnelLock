@@ -285,4 +285,13 @@
     <string name="hub_open_link_button">Open in the secure space</string>
     <string name="mock_link_no_coords">This link has no coordinates (a Google Maps short link). Type the coordinates, use a full link containing @lat,lon, or pick on the map.</string>
     <string name="mock_bad_coords">Not valid coordinates. Example: 35.6892, 51.3890</string>
+    <string name="mock_channel">Fake location</string>
+    <string name="mock_notification">Fake location is on (whole phone)</string>
+    <string name="mock_secure_hint">Location for the secure-space apps: real, or none. For a fake location use the normal TunnelLock (outside the secure space), because Android only allows faking there.</string>
+    <string name="settings_mock_location_real">Real location</string>
+    <string name="hub_mock_title">Fake location (whole phone)</string>
+    <string name="hub_mock_hint">Set a coordinate and every app on the phone, the secure-space apps included, reads that place. While it is on the whole phone\'s location is faked. You must pick this app (the normal TunnelLock) as the mock location app in Developer Options once.</string>
+    <string name="hub_mock_start">Turn on</string>
+    <string name="hub_mock_update">Update</string>
+    <string name="hub_mock_stop">Turn off</string>
 </resources>
