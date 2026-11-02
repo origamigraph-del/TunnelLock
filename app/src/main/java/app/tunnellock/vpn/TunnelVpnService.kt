@@ -18,7 +18,6 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import app.tunnellock.R
 import app.tunnellock.TunnelLockApp
-import app.tunnellock.core.geo.CoordinateParser
 import app.tunnellock.core.model.Protocol
 import app.tunnellock.core.model.ServerProfile
 import app.tunnellock.core.openvpn.OpenVpnConfig
@@ -183,7 +182,6 @@ class TunnelVpnService : VpnService() {
     }
 
     private val batteryLog by lazy { BatteryLog(this) }
-    private val mockLocation by lazy { MockLocation(this) }
 
     /** Health checks since the last battery sample (each one wakes the radio). */
     private val healthChecks = AtomicInteger()
@@ -325,18 +323,14 @@ class TunnelVpnService : VpnService() {
                 delay(BATTERY_SAMPLE_MS)
             }
         }
-        // The optional fake location follows its setting while the secure space runs.
-        // "blocked" = no location at all; a coordinate = that place; empty = the real location.
+        // Location for the secure-space apps: real, or none. (Faking a location needs the
+        // mock-location app in Developer Options, which can only be the personal copy, so the
+        // fake location runs there, device-wide, in MockLocationService.)
         scope.launch {
             store.mockLocation.collect { value ->
-                if (value == MOCK_BLOCKED) {
-                    mockLocation.apply(null)
-                    MockLocationState.status.value = MockStatus.BLOCKED
-                    Policy.applyLocationBlock(this@TunnelVpnService, blocked = true)
-                } else {
-                    Policy.applyLocationBlock(this@TunnelVpnService, blocked = false)
-                    mockLocation.apply(CoordinateParser.parse(value))
-                }
+                val blocked = value == MOCK_BLOCKED
+                Policy.applyLocationBlock(this@TunnelVpnService, blocked = blocked)
+                MockLocationState.status.value = if (blocked) MockStatus.BLOCKED else MockStatus.OFF
             }
         }
     }
@@ -371,7 +365,6 @@ class TunnelVpnService : VpnService() {
         XrayCore.stop()
         openVpn.kill()
         ssh.stop()
-        mockLocation.stop()
         closeTun()
         // Apps are not paused here: someone may be using one. Lockdown cuts their internet.
         TunnelState.update { it.copy(phase = Phase.OFF, connectedSince = null) }

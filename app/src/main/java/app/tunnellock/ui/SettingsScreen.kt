@@ -67,12 +67,10 @@ fun SettingsScreen(vm: MainViewModel) {
     val update by UpdateChecker.info.collectAsStateWithLifecycle()
     var notifyUpdates by remember { mutableStateOf(UpdateChecker.notificationsOn(context)) }
     val mockLocation by vm.store.mockLocation.collectAsStateWithLifecycle()
-    val mockStatus by MockLocationState.status.collectAsStateWithLifecycle()
     var showMockLocation by remember { mutableStateOf(false) }
     if (showMockLocation) {
         MockLocationDialog(
             current = mockLocation,
-            status = mockStatus,
             onSave = { vm.setMockLocation(it) },
             onDismiss = { showMockLocation = false },
         )
@@ -126,12 +124,9 @@ fun SettingsScreen(vm: MainViewModel) {
             headlineContent = { Text(stringResource(R.string.settings_mock_location)) },
             supportingContent = {
                 Text(
-                    when {
-                        mockLocation == TunnelVpnService.MOCK_BLOCKED -> stringResource(R.string.mock_mode_blocked)
-                        mockLocation.isBlank() -> stringResource(R.string.settings_mock_location_off)
-                        mockStatus == MockStatus.NEEDS_DEVELOPER_OPTION -> stringResource(R.string.mock_needs_dev)
-                        else -> stringResource(R.string.settings_mock_location_on, mockLocation)
-                    },
+                    stringResource(
+                        if (mockLocation == TunnelVpnService.MOCK_BLOCKED) R.string.mock_mode_blocked else R.string.settings_mock_location_real,
+                    ),
                 )
             },
         )
@@ -245,58 +240,28 @@ private fun openBatterySettings(context: android.content.Context, unrestricted: 
 }
 
 @Composable
-private fun MockLocationDialog(current: String, status: MockStatus, onSave: (String) -> Unit, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    // Three modes from the one stored value: "" real, "blocked" none, a coordinate = fake.
-    var mode by remember { mutableStateOf(when { current == TunnelVpnService.MOCK_BLOCKED -> "blocked"; current.isBlank() -> "real"; else -> "fake" }) }
-    var text by remember { mutableStateOf(if (current == TunnelVpnService.MOCK_BLOCKED || current.isBlank()) "" else current) }
-    val parsed = CoordinateParser.parse(text)
-    val valid = mode != "fake" || parsed != null
-    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+private fun MockLocationDialog(current: String, onSave: (String) -> Unit, onDismiss: () -> Unit) {
+    // Two modes in the secure space: real location, or none. Faking a location needs the
+    // mock-location app, which can only be the personal copy, so that lives in the outer app.
+    var mode by remember { mutableStateOf(if (current == TunnelVpnService.MOCK_BLOCKED) "blocked" else "real") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_mock_location)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    stringResource(R.string.mock_hint),
+                    stringResource(R.string.mock_secure_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 ModeRow("real", mode, R.string.mock_mode_real) { mode = it }
-                ModeRow("fake", mode, R.string.mock_mode_fake) { mode = it }
-                if (mode == "fake") {
-                    OutlinedTextField(
-                        value = text,
-                        onValueChange = { text = it },
-                        singleLine = true,
-                        isError = text.isNotBlank() && parsed == null,
-                        label = { Text(stringResource(R.string.mock_coordinates)) },
-                        placeholder = { Text("35.6892, 51.3890") },
-                        modifier = Modifier.fillMaxWidth().padding(start = 32.dp),
-                    )
-                    parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 32.dp)) }
-                    if (parsed == null && text.isNotBlank()) {
-                        val why = if (CoordinateParser.looksLikeUrl(text)) R.string.mock_link_no_coords else R.string.mock_bad_coords
-                        Text(stringResource(why), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 32.dp))
-                    }
-                    if (current == text && current.isNotBlank() && status == MockStatus.NEEDS_DEVELOPER_OPTION) {
-                        Text(stringResource(R.string.mock_needs_dev), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 32.dp))
-                        TextButton(onClick = {
-                            runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-                                .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) } }
-                        }, modifier = Modifier.padding(start = 24.dp)) { Text(stringResource(R.string.mock_open_dev)) }
-                    }
-                }
                 ModeRow("blocked", mode, R.string.mock_mode_blocked) { mode = it }
             }
         },
         confirmButton = {
             TextButton(
-                enabled = valid,
                 onClick = {
-                    if (mode == "fake" && Build.VERSION.SDK_INT >= 23) permission.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    onSave(when (mode) { "blocked" -> TunnelVpnService.MOCK_BLOCKED; "fake" -> parsed?.format() ?: ""; else -> "" })
+                    onSave(if (mode == "blocked") TunnelVpnService.MOCK_BLOCKED else "")
                     onDismiss()
                 },
             ) { Text(stringResource(R.string.dialog_save)) }

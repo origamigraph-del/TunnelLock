@@ -189,5 +189,16 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="vpn" />
         </service>
+
+        <!-- Feeds the fake location from the personal profile (the only place Developer
+             Options can make TunnelLock the mock-location app). -->
+        <service
+            android:name=".vpn.MockLocationService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Feeds a user-set mock location to the device's location providers" />
+        </service>
     </application>
 </manifest>

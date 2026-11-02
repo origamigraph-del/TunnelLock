@@ -61,6 +61,7 @@ class MockLocation(private val context: Context) {
     private val providers: List<String> = buildList {
         add(LocationManager.GPS_PROVIDER)
         add(LocationManager.NETWORK_PROVIDER)
+        add(LocationManager.PASSIVE_PROVIDER)
         if (Build.VERSION.SDK_INT >= 31) add(LocationManager.FUSED_PROVIDER)
     }
     private val lock = Any()

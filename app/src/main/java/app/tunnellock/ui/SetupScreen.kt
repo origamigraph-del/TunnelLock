@@ -47,6 +47,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -278,6 +279,7 @@ private fun PersonalHub(space: UserHandle) {
             if (outside.isNotEmpty()) {
                 item { OutsideCopies(outside) }
             }
+            item { MockLocationCard() }
             item { OpenLinkCard() }
             item {
                 val setTile = { on: Boolean ->
@@ -399,6 +401,67 @@ private fun OutsideCopies(apps: List<PhoneApp>) {
  * user's and stays). Preinstalled apps cannot be uninstalled: their settings
  * page offers "Disable".
  */
+@Composable
+private fun MockLocationCard() {
+    val context = LocalContext.current
+    val store = (context.applicationContext as app.tunnellock.TunnelLockApp).store
+    val current by store.mockLocation.collectAsStateWithLifecycle()
+    val status by app.tunnellock.vpn.MockLocationState.status.collectAsStateWithLifecycle()
+    var text by remember(current) { mutableStateOf(current) }
+    val parsed = app.tunnellock.core.geo.CoordinateParser.parse(text)
+    val on = current.isNotBlank()
+    val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionTitle(stringResource(R.string.hub_mock_title))
+        Text(
+            stringResource(R.string.hub_mock_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            singleLine = true,
+            isError = text.isNotBlank() && parsed == null,
+            label = { Text(stringResource(R.string.mock_coordinates)) },
+            placeholder = { Text("35.6892, 51.3890") },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall) }
+        if (parsed == null && text.isNotBlank()) {
+            val why = if (app.tunnellock.core.geo.CoordinateParser.looksLikeUrl(text)) R.string.mock_link_no_coords else R.string.mock_bad_coords
+            Text(stringResource(why), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (on && status == app.tunnellock.vpn.MockStatus.NEEDS_DEVELOPER_OPTION) {
+            Text(stringResource(R.string.mock_needs_dev), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            TextButton(onClick = {
+                runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+                    .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) } }
+            }) { Text(stringResource(R.string.mock_open_dev)) }
+        }
+        if (on && status == app.tunnellock.vpn.MockStatus.ACTIVE) {
+            Text(stringResource(R.string.mock_active), style = MaterialTheme.typography.bodySmall)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilledTonalButton(
+                enabled = parsed != null,
+                onClick = {
+                    if (Build.VERSION.SDK_INT >= 23) permission.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    store.setMockLocation(parsed!!.format())
+                    app.tunnellock.vpn.MockLocationService.start(context)
+                },
+            ) { Text(stringResource(if (on) R.string.hub_mock_update else R.string.hub_mock_start)) }
+            if (on) {
+                OutlinedButton(onClick = {
+                    store.setMockLocation("")
+                    app.tunnellock.vpn.MockLocationService.stop(context)
+                    text = ""
+                }) { Text(stringResource(R.string.hub_mock_stop)) }
+            }
+        }
+    }
+}
+
 @Composable
 private fun OpenLinkCard() {
     val context = LocalContext.current
