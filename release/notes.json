@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-02-link-clipboard",
-  "priority": "important",
-  "fa": "رفع «باز کردن لینک در فضای امن» روی گوشی‌هایی (مثل سامسونگ) که مسیر مستقیم بین‌پروفایلی را قبول نمی‌کنند: حالا لینک از همان راه کلیپ‌بوردی که کپی اپ‌ها استفاده می‌کند تحویل می‌شود و دیگر ارور «اول برنامه را باز کن» نمی‌دهد. ورودی مختصات هم ارقام فارسی را قبول می‌کند.",
-  "en": "Fixes 'open a link in the secure space' on phones (like Samsung) where the direct cross-profile route is not reachable: the link is now handed over via the same clipboard path that app-copying uses, instead of failing with 'open the app first'. The coordinate field also accepts Persian digits."
+  "id": "2026-11-02-euro-coords",
+  "priority": "recommended",
+  "fa": "ورودی موقعیت حالا مختصاتِ با ویرگول اعشاری (فرمت اروپایی که گوگل‌مپ آلمانی می‌دهد، مثل «41,0639, 29,0101») را هم قبول می‌کند؛ دیگر لازم نیست دستی به نقطه تبدیل کنی.",
+  "en": "The location field now also accepts coordinates with a decimal comma (the European format a German-locale Google Maps gives, like \"41,0639, 29,0101\"); no need to convert to dots by hand."
 }

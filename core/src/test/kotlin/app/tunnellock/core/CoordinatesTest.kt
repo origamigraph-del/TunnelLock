@@ -84,4 +84,27 @@ class CoordinatesTest {
         assertEquals(true, CoordinateParser.looksLikeUrl("https://maps.app.goo.gl/abc"))
         assertEquals(false, CoordinateParser.looksLikeUrl("35.6, 51.3"))
     }
+
+    @Test
+    fun europeanDecimalComma() {
+        // Google Maps in a German locale: "41,0639557, 29,0101129".
+        val c = parse("41,0639557, 29,0101129")!!
+        assertEquals(41.0639557, c.latitude, 1e-9)
+        assertEquals(29.0101129, c.longitude, 1e-9)
+    }
+
+    @Test
+    fun europeanCommaShortAndNegative() {
+        val c = parse("-33,87, 151,21")!!
+        assertEquals(-33.87, c.latitude, 1e-9)
+        assertEquals(151.21, c.longitude, 1e-9)
+        // Dot format with a comma-space separator still works.
+        assertEquals(parse("41,0639, 29,0101"), parse("41.0639, 29.0101"))
+    }
+
+    @Test
+    fun ambiguousEuropeanWithoutSpaceIsRejected() {
+        // No space after the separator: cannot tell decimals from the pair separator.
+        assertNull(parse("41,0639557,29,0101129"))
+    }
 }
