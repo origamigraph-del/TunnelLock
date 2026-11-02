@@ -276,6 +276,10 @@ private fun MockLocationDialog(current: String, status: MockStatus, onSave: (Str
                         modifier = Modifier.fillMaxWidth().padding(start = 32.dp),
                     )
                     parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 32.dp)) }
+                    if (parsed == null && text.isNotBlank()) {
+                        val why = if (CoordinateParser.looksLikeUrl(text)) R.string.mock_link_no_coords else R.string.mock_bad_coords
+                        Text(stringResource(why), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 32.dp))
+                    }
                     if (current == text && current.isNotBlank() && status == MockStatus.NEEDS_DEVELOPER_OPTION) {
                         Text(stringResource(R.string.mock_needs_dev), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 32.dp))
                         TextButton(onClick = {

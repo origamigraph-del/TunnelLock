@@ -21,7 +21,7 @@ object CoordinateParser {
     private val GEO = Regex("""geo:(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)""")
 
     fun parse(text: String): Coordinates? {
-        val input = text.trim()
+        val input = normalizeDigits(text).trim()
         if (input.isEmpty()) return null
         // A map link first: its @lat,lon or q=lat,lon is the place, not the zoom or other numbers.
         val match = GEO.find(input) ?: QUERY.find(input) ?: AT.find(input)
@@ -30,5 +30,23 @@ object CoordinateParser {
         val lat = match.groupValues[1].toDoubleOrNull() ?: return null
         val lon = match.groupValues[2].toDoubleOrNull() ?: return null
         return if (lat in -90.0..90.0 && lon in -180.0..180.0) Coordinates(lat, lon) else null
+    }
+
+    /** Whether the text is a link, so "no coordinates" can be told apart from a typo. */
+    fun looksLikeUrl(text: String): Boolean = "://" in text.trim()
+
+    /** Turns Persian/Arabic digits and the Arabic decimal mark into the ASCII a parser expects. */
+    private fun normalizeDigits(text: String): String = buildString(text.length) {
+        for (c in text) {
+            append(
+                when (c) {
+                    in '۰'..'۹' -> '0' + (c - '۰') // Persian 0-9
+                    in '٠'..'٩' -> '0' + (c - '٠') // Arabic-Indic 0-9
+                    '٫' -> '.' // Arabic decimal separator
+                    '،', '٬' -> ',' // Arabic comma / thousands separator
+                    else -> c
+                },
+            )
+        }
     }
 }
