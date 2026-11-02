@@ -364,7 +364,8 @@ for transport in tls ws tcp; do
     from=$(applines); s0=$(ssh_lines)
     start_with "ssh-$transport"
     if wait_phase CONNECTED "$from" 120; then
-        m=$(mark); sleep 25; check_online "SSH $transport online" "$m"
+        # SSH (especially wrapped in TLS) is slower per round, so allow a longer window for enough samples.
+        m=$(mark); sleep 45; check_online "SSH $transport online" "$m"
         n=$(ssh_forwards "$s0")
         if [ "$n" -gt 0 ]; then
             pass "SSH $transport through the server" "the SSH server opened $n connections to ipify for the probe"
