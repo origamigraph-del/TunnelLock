@@ -72,7 +72,7 @@ object Policy {
         // and connect or disconnect from its Quick Settings tile.
         runCatching {
             dpm.clearCrossProfileIntentFilters(admin)
-            listOf(CloneActivity.ACTION_CLONE_APPS, ToggleActivity.ACTION_TOGGLE).forEach { action ->
+            listOf(CloneActivity.ACTION_CLONE_APPS, ToggleActivity.ACTION_TOGGLE, OpenLinkActivity.ACTION_OPEN_LINK).forEach { action ->
                 dpm.addCrossProfileIntentFilter(
                     admin,
                     IntentFilter(action).apply { addCategory(Intent.CATEGORY_DEFAULT) },
@@ -82,7 +82,7 @@ object Policy {
         }.onFailure { Log.e(TAG, "cross-profile filter failed", it) }
         // Disabled in the manifest so the personal copy never answers these intents itself.
         val pm = context.packageManager
-        listOf(CloneActivity::class.java, ToggleActivity::class.java).forEach { activity ->
+        listOf(CloneActivity::class.java, ToggleActivity::class.java, OpenLinkActivity::class.java).forEach { activity ->
             pm.setComponentEnabledSetting(
                 ComponentName(context, activity),
                 PackageManager.COMPONENT_ENABLED_STATE_ENABLED,

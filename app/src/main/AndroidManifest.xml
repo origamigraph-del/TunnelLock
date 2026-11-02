@@ -76,6 +76,39 @@
             </intent-filter>
         </activity>
 
+        <!-- Opens a link inside the secure space (handed over from the personal side).
+             Enabled only inside the secure space, like CloneActivity. -->
+        <activity
+            android:name=".strict.OpenLinkActivity"
+            android:enabled="false"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="app.tunnellock.action.OPEN_LINK" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- The share target on the personal side: "Share a link → TunnelLock" sends it
+             into the secure space so the app's secure copy opens it, not the personal one. -->
+        <activity
+            android:name=".strict.ShareLinkActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:label="@string/open_link_share_label"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <!-- Connects or disconnects inside the secure space when the personal tile is tapped.
              Disabled by default and enabled only inside the secure space, like CloneActivity. -->
         <activity
