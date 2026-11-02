@@ -282,4 +282,7 @@
     <string name="mock_needs_dev">باید در «گزینه‌های برنامه‌نویس» TunnelLock را به‌عنوان «اپ موقعیت ساختگی» (mock location app) انتخاب کنی.</string>
     <string name="mock_open_dev">باز کردن گزینه‌های برنامه‌نویس</string>
     <string name="mock_turn_off">خاموش کردن</string>
+    <string name="mock_mode_real">موقعیت واقعی (پیش‌فرض)</string>
+    <string name="mock_mode_fake">موقعیت جعلی</string>
+    <string name="mock_mode_blocked">بدون موقعیت (مسدود): اپ‌های فضای امن هیچ موقعیتی نگیرند، نه جعلی نه واقعی</string>
 </resources>
