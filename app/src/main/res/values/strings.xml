@@ -296,4 +296,13 @@
     <string name="hub_open_link_button">باز کردن در فضای امن</string>
     <string name="mock_link_no_coords">این لینک مختصات ندارد (لینک کوتاه گوگل مپ). یا مختصات را مستقیم بزن، یا لینک کاملی که داخلش @عرض,طول باشد، یا از نقشه انتخاب کن.</string>
     <string name="mock_bad_coords">مختصات معتبر نیست. نمونه: 35.6892, 51.3890</string>
+    <string name="mock_channel">موقعیت جعلی</string>
+    <string name="mock_notification">موقعیت جعلی روشن است (کل گوشی)</string>
+    <string name="mock_secure_hint">موقعیت اپ‌های فضای امن: واقعی، یا بدون موقعیت. برای «موقعیت جعلی» از TunnelLock عادی (بیرون از فضای امن) استفاده کن، چون اندروید فقط آنجا اجازهٔ جعل می‌دهد.</string>
+    <string name="settings_mock_location_real">موقعیت واقعی</string>
+    <string name="hub_mock_title">موقعیت جعلی (کل گوشی)</string>
+    <string name="hub_mock_hint">یک مختصات بگذار تا همهٔ اپ‌های گوشی، از جمله اپ‌های داخل فضای امن، همان موقعیت را ببینند. تا وقتی روشن است، موقعیت کل گوشی جعلی است. یک‌بار باید در «گزینه‌های برنامه‌نویس» این برنامه (TunnelLock عادی) را به‌عنوان mock location app انتخاب کنی.</string>
+    <string name="hub_mock_start">روشن کردن</string>
+    <string name="hub_mock_update">به‌روز کردن</string>
+    <string name="hub_mock_stop">خاموش کردن</string>
 </resources>

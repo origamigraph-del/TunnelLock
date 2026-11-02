@@ -97,8 +97,12 @@ private fun ProbeScreen() {
     var realIp by remember { mutableStateOf(ProbeState.realIp(context)) }
     var autoSend by remember { mutableStateOf(ProbeState.autoSend(context)) }
     var precise by remember { mutableStateOf(ProbeState.precise(context)) }
-    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         ProbeService.start(context)
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        // Also ask for location, so the probe can report what the apps actually see.
+        locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
     }
     val inWorkProfile = ProbeState.inSecureSpace(context)
     val power = remember { context.getSystemService(PowerManager::class.java) }
@@ -164,7 +168,7 @@ private fun ProbeScreen() {
                             if (Build.VERSION.SDK_INT >= 33) {
                                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             } else {
-                                ProbeService.start(context)
+                                locationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                             }
                         }) { Text(stringResource(R.string.action_start)) }
                     }

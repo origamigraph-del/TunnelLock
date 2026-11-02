@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-02-euro-coords",
-  "priority": "recommended",
-  "fa": "ورودی موقعیت حالا مختصاتِ با ویرگول اعشاری (فرمت اروپایی که گوگل‌مپ آلمانی می‌دهد، مثل «41,0639, 29,0101») را هم قبول می‌کند؛ دیگر لازم نیست دستی به نقطه تبدیل کنی.",
-  "en": "The location field now also accepts coordinates with a decimal comma (the European format a German-locale Google Maps gives, like \"41,0639, 29,0101\"); no need to convert to dots by hand."
+  "id": "2026-11-02-device-mock",
+  "priority": "important",
+  "fa": "موقعیت جعلی روی سامسونگ درست شد: چون اندروید فقط به نسخهٔ عادی اجازهٔ جعل می‌دهد، موقعیت جعلی حالا از TunnelLock عادی اجرا می‌شود و موقعیتِ کل گوشی (از جمله اپ‌های فضای امن) را عوض می‌کند. همهٔ providerها جعل می‌شوند تا موقعیت واقعی از هیچ مسیری نشت نکند. TunnelProbe هم موقعیتی که اپ‌ها می‌بینند را گزارش می‌دهد تا خودت مطمئن شوی.",
+  "en": "Fake location fixed on Samsung: since Android only lets the personal copy fake, it now runs from the normal TunnelLock and changes the whole phone's location (the secure-space apps included). Every provider is faked so the real position cannot leak from any path. TunnelProbe also reports the location the apps see, so you can verify."
 }

@@ -46,6 +46,7 @@ class ProbeService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var lastBatteryLog = 0L
     private var lastCpuMs = 0L
+    private var lastLocationLog = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -76,6 +77,7 @@ class ProbeService : Service() {
                     val results = Checks.runAll()
                     ProbeState.record(this@ProbeService, results)
                     logBatteryIfDue()
+                    logLocationIfDue()
                     // Internet works right now: a good moment for logs that could not be sent before.
                     if (results.any { it.reached }) ProbeState.flushOutbox(this@ProbeService)
                     ProbeState.last.value?.let { last ->
@@ -129,6 +131,30 @@ class ProbeService : Service() {
         ProbeState.log(this, "-- battery $level%${if (charging) " (charging)" else ""}, probe CPU $cpu")
         lastBatteryLog = now
         lastCpuMs = cpuMs
+    }
+
+    /**
+     * Every 30 s: the location the apps in the secure space actually read. This shows whether
+     * a fake location reaches here, and whether the real position leaks from any provider.
+     */
+    private fun logLocationIfDue() {
+        val now = SystemClock.elapsedRealtime()
+        if (lastLocationLog != 0L && now - lastLocationLog < 30_000L) return
+        lastLocationLog = now
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION)
+            != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            ProbeState.log(this, "-- location: no permission (grant it to check what apps see)")
+            return
+        }
+        val manager = getSystemService(android.location.LocationManager::class.java)
+        val seen = listOf("gps", "network", "fused", "passive").mapNotNull { provider ->
+            val location = runCatching { manager.getLastKnownLocation(provider) }.getOrNull() ?: return@mapNotNull null
+            val ageS = (now - location.elapsedRealtimeNanos / 1_000_000).coerceAtLeast(0) / 1000
+            val mock = if (android.os.Build.VERSION.SDK_INT >= 31 && location.isMock) " [mock]" else ""
+            "$provider ${"%.5f".format(location.latitude)},${"%.5f".format(location.longitude)}$mock ${ageS}s"
+        }
+        ProbeState.log(this, "-- location: " + if (seen.isEmpty()) "none yet" else seen.joinToString(" | "))
     }
 
     private fun profileLabel(): String = "user ${android.os.Process.myUid() / 100_000}"
