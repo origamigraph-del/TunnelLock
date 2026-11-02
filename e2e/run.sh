@@ -480,6 +480,11 @@ adb emu geo fix 11.5820 48.1351 >/dev/null 2>&1 || true
 sh_ appops set --user 0 $APP android:mock_location allow >/dev/null 2>&1
 sh_ pm grant --user 0 $APP android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1
 sh_ pm grant --user "$U" $PROBE android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1
+# Location services must be on for each user or no provider delivers anything to anyone.
+for who in 0 "$U"; do
+    sh_ settings put secure --user "$who" location_mode 3 >/dev/null 2>&1
+    sh_ cmd location set-location-enabled true --user "$who" >/dev/null 2>&1
+done
 
 # Personal (user 0) prefs with the fake coordinate, then (re)start its mock service.
 PDATA=/data/user/0/$APP
@@ -505,6 +510,14 @@ if [ -n "$mock_ok" ]; then
 else
     fail "Fake location set" "not set: $(sh_ cat "$P0LOG" 2>/dev/null | grep -i location | tail -3 | cut -c1-140 | tr '\n' ' ')"
 fi
+
+# Ground truth from the system, so "none yet" in the secure space can be told apart from the
+# fake simply not crossing the profile boundary: is location on per user, and does the gps
+# provider device-wide actually hold the mocked 35.689 point?
+sleep 5
+ldiag="location_mode u0=$(sh_ settings get secure --user 0 location_mode) u$U=$(sh_ settings get secure --user "$U" location_mode)"
+ldiag="$ldiag | dumpsys: $(sh_ dumpsys location 2>/dev/null | grep -iE 'last location|mock|35\.68|48\.13|enabled' | head -12 | cut -c1-120 | tr '\n' '/')"
+echo "::notice title=Location diag::$(printf '%s' "$ldiag" | oneline)"
 
 # The probe inside the secure space reports the location it reads: must be the fake, not the real.
 # It needs a couple of 30 s location rounds after it starts listening before a fix arrives.
