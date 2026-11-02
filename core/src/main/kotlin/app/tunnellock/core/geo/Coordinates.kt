@@ -20,15 +20,21 @@ object CoordinateParser {
     private val QUERY = Regex("""[?&](?:q|ll|query|center|destination)=(-?\d{1,3}(?:\.\d+)?)(?:,|%2[Cc])(-?\d{1,3}(?:\.\d+)?)""")
     private val GEO = Regex("""geo:(-?\d{1,3}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)""")
 
+    // A whole bare pair with a European decimal comma ("41,0639557, 29,0101129"). The two
+    // numbers are told apart from their own decimal commas by the space after the separator.
+    private val EURO_PAIR = Regex("""^(-?\d{1,3}(?:[.,]\d+)?)\s*[,;]\s+(-?\d{1,3}(?:[.,]\d+)?)$""")
+
     fun parse(text: String): Coordinates? {
         val input = normalizeDigits(text).trim()
         if (input.isEmpty()) return null
         // A map link first: its @lat,lon or q=lat,lon is the place, not the zoom or other numbers.
         val match = GEO.find(input) ?: QUERY.find(input) ?: AT.find(input)
             ?: PAIR.find(input)?.takeIf { it.value == input } // a bare pair must be the whole text
+            ?: EURO_PAIR.find(input)
             ?: return null
-        val lat = match.groupValues[1].toDoubleOrNull() ?: return null
-        val lon = match.groupValues[2].toDoubleOrNull() ?: return null
+        // A comma left in a number is a decimal (European format); make it a dot.
+        val lat = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
+        val lon = match.groupValues[2].replace(',', '.').toDoubleOrNull() ?: return null
         return if (lat in -90.0..90.0 && lon in -180.0..180.0) Coordinates(lat, lon) else null
     }
 
