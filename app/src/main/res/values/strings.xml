@@ -294,4 +294,6 @@
     <string name="hub_open_link_hint">لینک فعال‌سازی ایمیل را به‌جای زدن، اینجا بگذار (یا از منوی اشتراک‌گذاری «باز کردن در فضای امن» را بزن) تا به‌جای نسخهٔ عادی، نسخهٔ داخل فضای امن بازش کند.</string>
     <string name="hub_open_link_field">لینک</string>
     <string name="hub_open_link_button">باز کردن در فضای امن</string>
+    <string name="mock_link_no_coords">این لینک مختصات ندارد (لینک کوتاه گوگل مپ). یا مختصات را مستقیم بزن، یا لینک کاملی که داخلش @عرض,طول باشد، یا از نقشه انتخاب کن.</string>
+    <string name="mock_bad_coords">مختصات معتبر نیست. نمونه: 35.6892, 51.3890</string>
 </resources>

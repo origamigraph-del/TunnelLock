@@ -283,4 +283,6 @@
     <string name="hub_open_link_hint">Instead of tapping an activation link from an email, paste it here (or use Share → Open in the secure space) so the secure-space copy of the app opens it, not the personal one.</string>
     <string name="hub_open_link_field">Link</string>
     <string name="hub_open_link_button">Open in the secure space</string>
+    <string name="mock_link_no_coords">This link has no coordinates (a Google Maps short link). Type the coordinates, use a full link containing @lat,lon, or pick on the map.</string>
+    <string name="mock_bad_coords">Not valid coordinates. Example: 35.6892, 51.3890</string>
 </resources>
