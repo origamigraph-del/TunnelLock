@@ -411,47 +411,6 @@ else
 fi
 check_blocked "SSH host key change blocks" "$m"
 
-# ---- 5d. Fake location for the secure space ------------------------------------------
-
-from=$(applines)
-MOCK_LOCATION="35.6892, 51.389" start_with xray
-wait_phase CONNECTED "$from" 120 || fail "Mock location connect" "no CONNECTED within 120 s"
-# The service feeds the location on a 1 s loop; give it a few seconds.
-sleep 8
-if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on: 35.6892, 51.389"; then
-    pass "Fake location" "the secure space is fed 35.6892, 51.389"
-else
-    fail "Fake location" "not set: $(applog | tail -n +"$((from + 1))" | grep -i location | tail -3 | cut -c1-140 | tr '\n' ' ')"
-fi
-if sh_ dumpsys location 2>/dev/null | grep -q "35.6892"; then
-    pass "Fake location in the system" "Android's location service reports the mock position"
-else
-    fail "Fake location in the system" "$(sh_ dumpsys location 2>/dev/null | grep -iE 'mock|test provider|last location' | head -4 | cut -c1-140 | tr '\n' ' ')"
-fi
-# Turned off again: a plain restart clears it, and the test providers are removed.
-from=$(applines)
-start_with xray
-wait_phase CONNECTED "$from" 120 || true
-sleep 5
-if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on"; then
-    fail "Fake location off" "it is still being set after being turned off"
-else
-    pass "Fake location off" "no location is fed once turned off"
-fi
-
-# ---- 5e. Open a link in the secure space ---------------------------------------------
-
-m=$(applines)
-sh_ am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://activate.e2e.test/go?t=secrettoken" -n $APP/.strict.ShareLinkActivity >/dev/null 2>&1
-sleep 6
-if applog | tail -n +"$((m + 1))" | grep -qE "OpenLink: opened a link in the secure space|OpenLink: no app in the secure space opened"; then
-    pass "Open link in secure space" "a link shared on the personal side reached the secure space"
-else
-    fail "Open link in secure space" "the link did not reach the secure space: $(applog | tail -n +"$((m + 1))" | grep -i openlink | tail -3 | cut -c1-140 | tr '\n' ' ')"
-fi
-# A one-time token in the link must never be written to the log.
-if applog | grep -q "secrettoken"; then fail "Link token kept out of the log" "the token was logged"; else pass "Link token kept out of the log" "the link's token is not in the log"; fi
-
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
 from=$(applines)
@@ -511,6 +470,52 @@ else
 fi
 sleep 45
 check_blocked "Wrong password blocks" "$m"
+
+# ---- 9. Fake location for the secure space ------------------------------------------
+
+from=$(applines)
+MOCK_LOCATION="35.6892, 51.389" start_with xray
+wait_phase CONNECTED "$from" 120 || fail "Mock location connect" "no CONNECTED within 120 s"
+# The service feeds the location on a 1 s loop; give it a few seconds.
+sleep 8
+if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on: 35.6892, 51.389"; then
+    pass "Fake location" "the secure space is fed 35.6892, 51.389"
+else
+    fail "Fake location" "not set: $(applog | tail -n +"$((from + 1))" | grep -i location | tail -3 | cut -c1-140 | tr '\n' ' ')"
+fi
+seen=""
+for _ in $(seq 1 12); do
+    if sh_ dumpsys location 2>/dev/null | grep -q "35.6892"; then seen=yes; break; fi
+    sleep 2
+done
+if [ -n "$seen" ]; then
+    pass "Fake location in the system" "Android's location service reports the mock position"
+else
+    fail "Fake location in the system" "$(sh_ dumpsys location 2>/dev/null | grep -iE 'mock|test provider|last location' | head -4 | cut -c1-140 | tr '\n' ' ')"
+fi
+# Turned off again: a plain restart clears it, and the test providers are removed.
+from=$(applines)
+start_with xray
+wait_phase CONNECTED "$from" 120 || true
+sleep 5
+if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on"; then
+    fail "Fake location off" "it is still being set after being turned off"
+else
+    pass "Fake location off" "no location is fed once turned off"
+fi
+
+# ---- 10. Open a link in the secure space --------------------------------------------
+
+m=$(applines)
+sh_ am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://activate.e2e.test/go?t=secrettoken" -n $APP/.strict.ShareLinkActivity >/dev/null 2>&1
+sleep 6
+if applog | tail -n +"$((m + 1))" | grep -qE "OpenLink: opened a link in the secure space|OpenLink: no app in the secure space opened"; then
+    pass "Open link in secure space" "a link shared on the personal side reached the secure space"
+else
+    fail "Open link in secure space" "the link did not reach the secure space: $(applog | tail -n +"$((m + 1))" | grep -i openlink | tail -3 | cut -c1-140 | tr '\n' ' ')"
+fi
+# A one-time token in the link must never be written to the log.
+if applog | grep -q "secrettoken"; then fail "Link token kept out of the log" "the token was logged"; else pass "Link token kept out of the log" "the link's token is not in the log"; fi
 
 # ---- report ---------------------------------------------------------------------------
 
