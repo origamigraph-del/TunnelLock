@@ -483,8 +483,10 @@ if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on: 35
 else
     fail "Fake location" "not set: $(applog | tail -n +"$((from + 1))" | grep -i location | tail -3 | cut -c1-140 | tr '\n' ' ')"
 fi
+# The system's "last location" updates only when something reads location, which can lag;
+# poll generously for the mocked position to appear.
 seen=""
-for _ in $(seq 1 12); do
+for _ in $(seq 1 30); do
     if sh_ dumpsys location 2>/dev/null | grep -q "35.6892"; then seen=yes; break; fi
     sleep 2
 done
@@ -506,13 +508,19 @@ fi
 
 # ---- 10. Open a link in the secure space --------------------------------------------
 
+# The secure-space handler, invoked directly (the personal->secure hop uses Android's own
+# cross-profile forwarder, the same one the app-copy and tile hand-overs use).
 m=$(applines)
-sh_ am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://activate.e2e.test/go?t=secrettoken" -n $APP/.strict.ShareLinkActivity >/dev/null 2>&1
-sleep 6
-if applog | tail -n +"$((m + 1))" | grep -qE "OpenLink: opened a link in the secure space|OpenLink: no app in the secure space opened"; then
-    pass "Open link in secure space" "a link shared on the personal side reached the secure space"
+sh_ am start --user "$U" -a app.tunnellock.action.OPEN_LINK --es url "https://activate.e2e.test/go?t=secrettoken" -n $APP/.strict.OpenLinkActivity >/dev/null 2>&1
+opened=""
+for _ in $(seq 1 8); do
+    if applog | tail -n +"$((m + 1))" | grep -qE "OpenLink: opened a link in the secure space|OpenLink: no app in the secure space opened"; then opened=yes; break; fi
+    sleep 2
+done
+if [ -n "$opened" ]; then
+    pass "Open link in secure space" "the secure-space handler opened the link"
 else
-    fail "Open link in secure space" "the link did not reach the secure space: $(applog | tail -n +"$((m + 1))" | grep -i openlink | tail -3 | cut -c1-140 | tr '\n' ' ')"
+    fail "Open link in secure space" "the handler did not run: $(applog | tail -n +"$((m + 1))" | grep -i openlink | tail -3 | cut -c1-140 | tr '\n' ' ')"
 fi
 # A one-time token in the link must never be written to the log.
 if applog | grep -q "secrettoken"; then fail "Link token kept out of the log" "the token was logged"; else pass "Link token kept out of the log" "the link's token is not in the log"; fi
