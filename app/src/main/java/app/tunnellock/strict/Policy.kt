@@ -139,6 +139,27 @@ object Policy {
 
     fun protectedPackages(context: Context): List<String> = protectedApps(context).map { it.packageName }
 
+    /**
+     * Withholds the real location from the protected apps (the profile owner denies the
+     * location permissions), so the secure space never exposes the true position when no
+     * fake location is being fed. Reversible: [blocked] false hands the permission back to
+     * the user. Never touches TunnelLock or the leak-test tool.
+     */
+    fun applyLocationBlock(context: Context, blocked: Boolean, packages: Collection<String> = protectedPackages(context)) {
+        if (!isProfileOwner(context)) return
+        val dpm = dpm(context)
+        val admin = admin(context)
+        val state = if (blocked) {
+            DevicePolicyManager.PERMISSION_GRANT_STATE_DENIED
+        } else {
+            DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT
+        }
+        val locationPermissions = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)
+        (packages - PROBE_PACKAGE - context.packageName).forEach { pkg ->
+            locationPermissions.forEach { perm -> runCatching { dpm.setPermissionGrantState(admin, pkg, perm, state) } }
+        }
+    }
+
     /** System apps cannot be installed from an APK; the profile owner switches them on instead. */
     fun enableSystemApp(context: Context, pkg: String) {
         dpm(context).enableSystemApp(admin(context), pkg)

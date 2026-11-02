@@ -24,6 +24,9 @@ enum class MockStatus {
      * must pick it as the mock-location app in Developer Options.
      */
     NEEDS_DEVELOPER_OPTION,
+
+    /** The protected apps are given no location at all (the real one is withheld). */
+    BLOCKED,
 }
 
 object MockLocationState {
@@ -45,12 +48,21 @@ class MockLocation(private val context: Context) {
     private companion object {
         const val TAG = "Location"
         const val UPDATE_MS = 1_000L
-
-        /** Apps read the location through these; the "fused" provider follows them when real sensors are off. */
-        val PROVIDERS = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
     }
 
     private val manager = context.getSystemService(LocationManager::class.java)
+
+    /**
+     * Every provider the apps might read. "fused" matters most: Google Play Services feeds
+     * it from Wi-Fi and cell, so without mocking it the real position leaks even while GPS
+     * is faked. Each provider is handled on its own, so one it will not accept (fused throws
+     * on some phones) does not stop the rest.
+     */
+    private val providers: List<String> = buildList {
+        add(LocationManager.GPS_PROVIDER)
+        add(LocationManager.NETWORK_PROVIDER)
+        if (Build.VERSION.SDK_INT >= 31) add(LocationManager.FUSED_PROVIDER)
+    }
     private val lock = Any()
     private var target: Coordinates? = null
     private var worker: Thread? = null
@@ -84,7 +96,7 @@ class MockLocation(private val context: Context) {
         var reported = false
         while (true) {
             val here = synchronized(lock) { if (worker == Thread.currentThread()) target else null } ?: return
-            val ok = PROVIDERS.any { push(it, here) }
+            val ok = providers.any { push(it, here) }
             val status = if (ok) MockStatus.ACTIVE else MockStatus.NEEDS_DEVELOPER_OPTION
             MockLocationState.status.value = status
             if (!reported) {

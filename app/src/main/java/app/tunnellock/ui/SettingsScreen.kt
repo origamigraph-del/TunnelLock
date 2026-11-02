@@ -28,6 +28,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.ui.Alignment
+import androidx.compose.material3.RadioButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +46,7 @@ import app.tunnellock.BuildConfig
 import app.tunnellock.R
 import app.tunnellock.data.UpdateChecker
 import app.tunnellock.vpn.MockStatus
+import app.tunnellock.vpn.TunnelVpnService
 import app.tunnellock.vpn.MockLocationState
 import app.tunnellock.core.geo.CoordinateParser
 import app.tunnellock.vpn.XrayCore
@@ -124,6 +127,7 @@ fun SettingsScreen(vm: MainViewModel) {
             supportingContent = {
                 Text(
                     when {
+                        mockLocation == TunnelVpnService.MOCK_BLOCKED -> stringResource(R.string.mock_mode_blocked)
                         mockLocation.isBlank() -> stringResource(R.string.settings_mock_location_off)
                         mockStatus == MockStatus.NEEDS_DEVELOPER_OPTION -> stringResource(R.string.mock_needs_dev)
                         else -> stringResource(R.string.settings_mock_location_on, mockLocation)
@@ -243,59 +247,66 @@ private fun openBatterySettings(context: android.content.Context, unrestricted: 
 @Composable
 private fun MockLocationDialog(current: String, status: MockStatus, onSave: (String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
-    var text by remember { mutableStateOf(current) }
+    // Three modes from the one stored value: "" real, "blocked" none, a coordinate = fake.
+    var mode by remember { mutableStateOf(when { current == TunnelVpnService.MOCK_BLOCKED -> "blocked"; current.isBlank() -> "real"; else -> "fake" }) }
+    var text by remember { mutableStateOf(if (current == TunnelVpnService.MOCK_BLOCKED || current.isBlank()) "" else current) }
     val parsed = CoordinateParser.parse(text)
-    val valid = text.isBlank() || parsed != null
+    val valid = mode != "fake" || parsed != null
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.settings_mock_location)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     stringResource(R.string.mock_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    singleLine = true,
-                    isError = !valid,
-                    label = { Text(stringResource(R.string.mock_coordinates)) },
-                    placeholder = { Text("35.6892, 51.3890") },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall) }
-                if (current.isNotBlank() && status == MockStatus.NEEDS_DEVELOPER_OPTION) {
-                    Text(
-                        stringResource(R.string.mock_needs_dev),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
+                ModeRow("real", mode, R.string.mock_mode_real) { mode = it }
+                ModeRow("fake", mode, R.string.mock_mode_fake) { mode = it }
+                if (mode == "fake") {
+                    OutlinedTextField(
+                        value = text,
+                        onValueChange = { text = it },
+                        singleLine = true,
+                        isError = text.isNotBlank() && parsed == null,
+                        label = { Text(stringResource(R.string.mock_coordinates)) },
+                        placeholder = { Text("35.6892, 51.3890") },
+                        modifier = Modifier.fillMaxWidth().padding(start = 32.dp),
                     )
-                    TextButton(onClick = {
-                        runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
-                            .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) } }
-                    }) { Text(stringResource(R.string.mock_open_dev)) }
-                } else if (current.isNotBlank() && status == MockStatus.ACTIVE) {
-                    Text(stringResource(R.string.mock_active), style = MaterialTheme.typography.bodySmall, color = Green)
+                    parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 32.dp)) }
+                    if (current == text && current.isNotBlank() && status == MockStatus.NEEDS_DEVELOPER_OPTION) {
+                        Text(stringResource(R.string.mock_needs_dev), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(start = 32.dp))
+                        TextButton(onClick = {
+                            runCatching { context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)) }
+                                .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS)) } }
+                        }, modifier = Modifier.padding(start = 24.dp)) { Text(stringResource(R.string.mock_open_dev)) }
+                    }
                 }
+                ModeRow("blocked", mode, R.string.mock_mode_blocked) { mode = it }
             }
         },
         confirmButton = {
             TextButton(
                 enabled = valid,
                 onClick = {
-                    if (text.isNotBlank() && Build.VERSION.SDK_INT >= 23) {
-                        permission.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                    }
-                    onSave(parsed?.format() ?: "")
+                    if (mode == "fake" && Build.VERSION.SDK_INT >= 23) permission.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                    onSave(when (mode) { "blocked" -> TunnelVpnService.MOCK_BLOCKED; "fake" -> parsed?.format() ?: ""; else -> "" })
                     onDismiss()
                 },
-            ) { Text(stringResource(if (text.isBlank()) R.string.mock_turn_off else R.string.dialog_save)) }
+            ) { Text(stringResource(R.string.dialog_save)) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.dialog_cancel)) } },
     )
+}
+
+@Composable
+private fun ModeRow(value: String, selected: String, label: Int, onPick: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { onPick(value) }) {
+        RadioButton(selected = selected == value, onClick = { onPick(value) })
+        Text(stringResource(label), style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 private val Green = androidx.compose.ui.graphics.Color(0xFF2E7D32)
