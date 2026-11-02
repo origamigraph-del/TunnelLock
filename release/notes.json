@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-02-location-modes",
+  "id": "2026-11-02-open-link",
   "priority": "recommended",
-  "fa": "موقعیت فضای امن سه حالت شد: واقعی، جعلی، یا «بدون موقعیت». در حالت جعلی، provider «fused» (که از Wi-Fi و دکل می‌خواند) هم جعل می‌شود تا موقعیت واقعی از آن راه هم بیرون نرود. حالت «بدون موقعیت» موقعیت را کامل از اپ‌های فضای امن می‌گیرد.",
-  "en": "The secure space's location now has three modes: real, fake, or no location. In fake mode the \"fused\" provider (fed by Wi-Fi and cell) is faked too, so the real position cannot leak through it. \"No location\" withholds location from the secure-space apps entirely."
+  "fa": "باز کردن لینک در فضای امن: لینک فعال‌سازی ایمیل را به‌جای زدن، در TunnelLock بیرونی بگذار یا از «اشتراک‌گذاری → باز کردن در فضای امن» بفرست تا نسخهٔ داخل فضای امن اپ بازش کند، نه نسخهٔ عادی (که IP و موقعیت اشتباه می‌داد). همراه با سه‌حالتهٔ موقعیت و جعل provider «fused».",
+  "en": "Open a link in the secure space: instead of tapping an email's activation link, paste it in the outer TunnelLock or use Share → Open in the secure space, so the app's secure-space copy opens it rather than the personal one (which had the wrong IP and location). Also the three location modes and the fused-provider fix."
 }

@@ -69,6 +69,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
 import app.tunnellock.data.UpdateChecker
 import app.tunnellock.strict.PhoneApp
+import app.tunnellock.strict.ShareLinkActivity
+import app.tunnellock.core.parser.LinkExtractor
 import app.tunnellock.strict.PhoneApps
 import app.tunnellock.strict.Policy
 import app.tunnellock.tile.ToggleTileService
@@ -276,6 +278,7 @@ private fun PersonalHub(space: UserHandle) {
             if (outside.isNotEmpty()) {
                 item { OutsideCopies(outside) }
             }
+            item { OpenLinkCard() }
             item {
                 val setTile = { on: Boolean ->
                     ToggleTileService.setEnabled(context, on)
@@ -396,6 +399,39 @@ private fun OutsideCopies(apps: List<PhoneApp>) {
  * user's and stays). Preinstalled apps cannot be uninstalled: their settings
  * page offers "Disable".
  */
+@Composable
+private fun OpenLinkCard() {
+    val context = LocalContext.current
+    var link by remember { mutableStateOf("") }
+    Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SectionTitle(stringResource(R.string.hub_open_link_title))
+        Text(
+            stringResource(R.string.hub_open_link_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedTextField(
+            value = link,
+            onValueChange = { link = it },
+            singleLine = true,
+            label = { Text(stringResource(R.string.hub_open_link_field)) },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        FilledTonalButton(
+            onClick = {
+                val url = LinkExtractor.firstUrl(link)
+                val activity = context as? android.app.Activity
+                if (url != null && activity != null) {
+                    ShareLinkActivity.open(activity, url)
+                    link = ""
+                }
+            },
+            enabled = LinkExtractor.firstUrl(link) != null,
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text(stringResource(R.string.hub_open_link_button)) }
+    }
+}
+
 private fun removeOutsideCopy(context: Context, app: PhoneApp) {
     val uri = Uri.parse("package:${app.packageName}")
     val intent = if (app.system) Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, uri) else Intent(Intent.ACTION_DELETE, uri)

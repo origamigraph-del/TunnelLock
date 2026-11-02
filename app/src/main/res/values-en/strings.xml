@@ -274,4 +274,13 @@
     <string name="mock_mode_real">Real location (default)</string>
     <string name="mock_mode_fake">Fake location</string>
     <string name="mock_mode_blocked">No location (blocked): secure-space apps get no location, fake or real</string>
+    <string name="open_link_share_label">Open in the secure space</string>
+    <string name="open_link_sent">Link sent to the secure space</string>
+    <string name="open_link_open_space">Open TunnelLock inside the secure space once, then send the link again.</string>
+    <string name="open_link_no_url">No link found.</string>
+    <string name="open_link_none">No app in the secure space opened this link. Make sure that app is installed in the secure space.</string>
+    <string name="hub_open_link_title">Open a link in the secure space</string>
+    <string name="hub_open_link_hint">Instead of tapping an activation link from an email, paste it here (or use Share → Open in the secure space) so the secure-space copy of the app opens it, not the personal one.</string>
+    <string name="hub_open_link_field">Link</string>
+    <string name="hub_open_link_button">Open in the secure space</string>
 </resources>
