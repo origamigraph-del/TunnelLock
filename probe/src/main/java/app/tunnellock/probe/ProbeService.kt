@@ -187,14 +187,17 @@ class ProbeService : Service() {
             add("gps"); add("network"); add("passive")
             if (Build.VERSION.SDK_INT >= 31) add("fused")
         }
-        var any = false
+        val ok = mutableListOf<String>()
         providers.forEach { provider ->
             runCatching {
                 manager.requestLocationUpdates(provider, 1_000L, 0f, locationListener, android.os.Looper.getMainLooper())
-                any = true
+                ok += provider
             }
         }
-        if (any) locating = true
+        if (ok.isNotEmpty()) {
+            locating = true
+            ProbeState.log(this, "-- location listening on ${ok.joinToString("/")}")
+        }
     }
 
     private fun profileLabel(): String = "user ${android.os.Process.myUid() / 100_000}"
