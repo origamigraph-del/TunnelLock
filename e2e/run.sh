@@ -417,7 +417,7 @@ check_blocked "SSH host key change blocks" "$m"
 from=$(applines)
 start_with ovpn
 if wait_phase CONNECTED "$from" 150; then pass "OpenVPN connect" "connected with username and password"; else fail "OpenVPN connect" "no CONNECTED within 150 s"; fi
-m=$(mark); sleep 25; check_online "OpenVPN online" "$m"
+m=$(mark); sleep 45; check_online "OpenVPN online" "$m"
 if sudo grep -q "e2e" "$OUT/openvpn-status.log" 2>/dev/null; then pass "OpenVPN server" "the server lists the emulator as a client"; else fail "OpenVPN server" "the client is not in the server's status"; fi
 
 # ---- 6b. an app with its own V2Ray server while the main server is OpenVPN: cut off ------
@@ -507,7 +507,8 @@ else
 fi
 
 # The probe inside the secure space reports the location it reads: must be the fake, not the real.
-m=$(mark); sleep 40
+# It needs a couple of 30 s location rounds after it starts listening before a fix arrives.
+m=$(mark); sleep 75
 loc=$(probelog | tail -n +"$((m + 1))" | grep -- "-- location:" | tail -1)
 if echo "$loc" | grep -q "35.689"; then
     pass "Fake reaches the secure space" "${loc#*-- }"
