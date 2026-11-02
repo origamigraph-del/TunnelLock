@@ -260,4 +260,15 @@
     <string name="settings_battery_saving">Save battery with the screen off</string>
     <string name="settings_battery_saving_desc">With the screen off the connection is checked every minute instead of every 15 seconds, and at once when the screen comes on. A drop is then noticed up to about a minute later (apps have no internet meanwhile either; nothing gets out).</string>
     <string name="hub_space_paused">The secure space is off ("work apps" paused): protected apps cannot open and TunnelLock does not run inside it (no connection, no update checks). Turn on "Work apps" in Quick Settings.</string>
+    <string name="settings_mock_location">Fake location for the secure space</string>
+    <string name="settings_mock_location_off">Off</string>
+    <string name="settings_mock_location_on">On: %1$s</string>
+    <string name="mock_hint">One fixed location is given to every app in the secure space (not a separate one per app; without root Android allows just one fake-location app). This is the device GPS, not the IP; the IP is set by each app\'s server. For it to work you must pick this app as the "mock location app" in Developer Options.</string>
+    <string name="mock_coordinates">Coordinates or a Google Maps link</string>
+    <string name="mock_parsed">Location: %1$s</string>
+    <string name="mock_parsed_none">Not valid coordinates or a link</string>
+    <string name="mock_active">Active; apps in the secure space see this location ✓</string>
+    <string name="mock_needs_dev">Pick TunnelLock as the "mock location app" in Developer Options.</string>
+    <string name="mock_open_dev">Open Developer Options</string>
+    <string name="mock_turn_off">Turn off</string>
 </resources>

@@ -271,4 +271,15 @@
     <string name="settings_battery_saving">صرفه‌جویی باتری با صفحهٔ خاموش</string>
     <string name="settings_battery_saving_desc">با صفحهٔ خاموش اتصال هر یک دقیقه بررسی می‌شود نه هر ۱۵ ثانیه، و با روشن شدن صفحه فوراً. قطع اتصال در این حالت تا حدود یک دقیقه دیرتر دیده می‌شود (اپ‌ها در این مدت هم اینترنت ندارند، چیزی بیرون نمی‌رود).</string>
     <string name="hub_space_paused">فضای امن خاموش است («برنامه‌های کاری» متوقف شده‌اند): اپ‌های محافظت‌شده باز نمی‌شوند و TunnelLock داخل آن کار نمی‌کند (نه وصل می‌شود، نه نسخهٔ جدید را بررسی می‌کند). از تنظیمات سریع «برنامه‌های کاری» را روشن کنید.</string>
+    <string name="settings_mock_location">موقعیت جعلی فضای امن</string>
+    <string name="settings_mock_location_off">خاموش</string>
+    <string name="settings_mock_location_on">روشن: %1$s</string>
+    <string name="mock_hint">یک موقعیت ثابت به همهٔ اپ‌های فضای امن داده می‌شود (نه برای هر اپ جدا؛ اندروید بدون روت فقط یک اپ موقعیت جعلی دارد). این GPS دستگاه است و ربطی به IP ندارد؛ IP را سرور هر اپ تعیین می‌کند. برای کار کردن باید در «گزینه‌های برنامه‌نویس» این برنامه را به‌عنوان «اپ موقعیت ساختگی» انتخاب کنی.</string>
+    <string name="mock_coordinates">مختصات یا لینک نقشه گوگل</string>
+    <string name="mock_parsed">موقعیت: %1$s</string>
+    <string name="mock_parsed_none">مختصات یا لینک معتبر نیست</string>
+    <string name="mock_active">فعال است؛ اپ‌های فضای امن این موقعیت را می‌بینند ✓</string>
+    <string name="mock_needs_dev">باید در «گزینه‌های برنامه‌نویس» TunnelLock را به‌عنوان «اپ موقعیت ساختگی» (mock location app) انتخاب کنی.</string>
+    <string name="mock_open_dev">باز کردن گزینه‌های برنامه‌نویس</string>
+    <string name="mock_turn_off">خاموش کردن</string>
 </resources>

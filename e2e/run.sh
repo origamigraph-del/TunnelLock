@@ -72,6 +72,9 @@ case "$owner_result" in
 esac
 sh_ appops set --user "$U" $APP ACTIVATE_VPN allow >/dev/null
 sh_ pm grant --user "$U" $PROBE android.permission.POST_NOTIFICATIONS >/dev/null 2>&1
+# Picking the mock-location app in Developer Options grants this appop; do it directly.
+sh_ appops set --user "$U" $APP android:mock_location allow >/dev/null 2>&1
+sh_ pm grant --user "$U" $APP android.permission.ACCESS_FINE_LOCATION >/dev/null 2>&1
 
 # TunnelLock's process in the secure space (not the personal copy).
 app_pid() { sh_ ps -A -o PID,USER,NAME | awk -v user="u${U}_" 'index($2, user) == 1 && $3 == "app.tunnellock" {print $1}'; }
@@ -86,7 +89,7 @@ kill_app() {
 
 # Writes the server list and the selection, then (re)starts TunnelLock; it connects on its own.
 start_with() { # <xray|ovpn> [password] [package that gets server B as its own]
-    python3 "$ROOT/e2e/prefs.py" "$OUT/xray.link" "$OUT/client.ovpn" "$1" "${2:-$OVPN_PASSWORD}" "$OUT/xray-b.link" ${3:+"$3"} >"$OUT/tunnellock.xml"
+    MOCK_LOCATION="${MOCK_LOCATION:-}" python3 "$ROOT/e2e/prefs.py" "$OUT/xray.link" "$OUT/client.ovpn" "$1" "${2:-$OVPN_PASSWORD}" "$OUT/xray-b.link" ${3:+"$3"} >"$OUT/tunnellock.xml"
     adb push "$OUT/tunnellock.xml" /data/local/tmp/tunnellock.xml >/dev/null
     local uid ctx
     uid=$(sh_ stat -c %u "$DATA")
@@ -407,6 +410,34 @@ else
     fail "SSH host key change" "no refusal: $(ssh_why "$from")"
 fi
 check_blocked "SSH host key change blocks" "$m"
+
+# ---- 5d. Fake location for the secure space ------------------------------------------
+
+from=$(applines)
+MOCK_LOCATION="35.6892, 51.389" start_with xray
+wait_phase CONNECTED "$from" 120 || fail "Mock location connect" "no CONNECTED within 120 s"
+# The service feeds the location on a 1 s loop; give it a few seconds.
+sleep 8
+if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on: 35.6892, 51.389"; then
+    pass "Fake location" "the secure space is fed 35.6892, 51.389"
+else
+    fail "Fake location" "not set: $(applog | tail -n +"$((from + 1))" | grep -i location | tail -3 | cut -c1-140 | tr '\n' ' ')"
+fi
+if sh_ dumpsys location 2>/dev/null | grep -q "35.6892"; then
+    pass "Fake location in the system" "Android's location service reports the mock position"
+else
+    fail "Fake location in the system" "$(sh_ dumpsys location 2>/dev/null | grep -iE 'mock|test provider|last location' | head -4 | cut -c1-140 | tr '\n' ' ')"
+fi
+# Turned off again: a plain restart clears it, and the test providers are removed.
+from=$(applines)
+start_with xray
+wait_phase CONNECTED "$from" 120 || true
+sleep 5
+if applog | tail -n +"$((from + 1))" | grep -q "I/Location: fake location on"; then
+    fail "Fake location off" "it is still being set after being turned off"
+else
+    pass "Fake location off" "no location is fed once turned off"
+fi
 
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
