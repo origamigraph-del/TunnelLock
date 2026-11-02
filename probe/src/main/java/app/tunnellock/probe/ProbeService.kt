@@ -47,6 +47,22 @@ class ProbeService : Service() {
     private var lastBatteryLog = 0L
     private var lastCpuMs = 0L
     private var lastLocationLog = 0L
+    @Volatile private var locating = false
+
+    /**
+     * An idle listener kept registered while we have permission. getLastKnownLocation returns
+     * null until something actually asks a provider for a fix, so without this the log never
+     * sees the location the secure-space apps would get. Registering here also mirrors what a
+     * real app does (it requests updates), which is exactly what must receive the device-wide
+     * fake set from the personal profile.
+     */
+    private val locationListener = object : android.location.LocationListener {
+        override fun onLocationChanged(location: android.location.Location) {}
+        override fun onLocationChanged(locations: List<android.location.Location>) {}
+        override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+        override fun onProviderEnabled(provider: String) {}
+        override fun onProviderDisabled(provider: String) {}
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -106,6 +122,7 @@ class ProbeService : Service() {
 
     override fun onDestroy() {
         pulse?.finish()
+        runCatching { getSystemService(android.location.LocationManager::class.java)?.removeUpdates(locationListener) }
         scope.cancel()
         runCatching { wakeLock?.release() }
         ProbeState.setRunning(false)
@@ -147,6 +164,7 @@ class ProbeService : Service() {
             ProbeState.log(this, "-- location: no permission (grant it to check what apps see)")
             return
         }
+        ensureLocating()
         val manager = getSystemService(android.location.LocationManager::class.java)
         val seen = listOf("gps", "network", "fused", "passive").mapNotNull { provider ->
             val location = runCatching { manager.getLastKnownLocation(provider) }.getOrNull() ?: return@mapNotNull null
@@ -155,6 +173,28 @@ class ProbeService : Service() {
             "$provider ${"%.5f".format(location.latitude)},${"%.5f".format(location.longitude)}$mock ${ageS}s"
         }
         ProbeState.log(this, "-- location: " + if (seen.isEmpty()) "none yet" else seen.joinToString(" | "))
+    }
+
+    /**
+     * Start listening to every provider once permission is granted, so a fix actually arrives
+     * (otherwise getLastKnownLocation stays null) and so the device-wide fake set from the
+     * personal profile is delivered here, in the secure space, exactly as to a real app.
+     */
+    private fun ensureLocating() {
+        if (locating) return
+        val manager = getSystemService(android.location.LocationManager::class.java) ?: return
+        val providers = buildList {
+            add("gps"); add("network"); add("passive")
+            if (Build.VERSION.SDK_INT >= 31) add("fused")
+        }
+        var any = false
+        providers.forEach { provider ->
+            runCatching {
+                manager.requestLocationUpdates(provider, 1_000L, 0f, locationListener, android.os.Looper.getMainLooper())
+                any = true
+            }
+        }
+        if (any) locating = true
     }
 
     private fun profileLabel(): String = "user ${android.os.Process.myUid() / 100_000}"
