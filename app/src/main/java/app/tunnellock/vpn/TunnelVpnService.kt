@@ -99,6 +99,9 @@ class TunnelVpnService : VpnService() {
          */
         private const val TUN_IPV4 = "10.233.97.1"
         private const val TUN_IPV6 = "fd8e:6d17:21c0::1"
+
+        /** The fake-location setting's value for "give the apps no location at all". */
+        const val MOCK_BLOCKED = "blocked"
         private const val INITIAL_ATTEMPTS = 3
         private const val MAX_BACKOFF_MS = 30_000L
 
@@ -220,7 +223,11 @@ class TunnelVpnService : VpnService() {
                 AppLog.i(TAG, "reconnecting: an app with its own server was installed or removed")
                 commands.trySend(Command.Connect)
             }
-            if (intent.action == Intent.ACTION_PACKAGE_ADDED) AppGate.closeNewApp(context, pkg)
+            if (intent.action == Intent.ACTION_PACKAGE_ADDED) {
+                AppGate.closeNewApp(context, pkg)
+                // A new protected app follows the location mode too, so it cannot leak the real position.
+                if (store.mockLocation.value == MOCK_BLOCKED) Policy.applyLocationBlock(context, blocked = true, packages = listOf(pkg))
+            }
         }
     }
 
@@ -319,9 +326,17 @@ class TunnelVpnService : VpnService() {
             }
         }
         // The optional fake location follows its setting while the secure space runs.
+        // "blocked" = no location at all; a coordinate = that place; empty = the real location.
         scope.launch {
             store.mockLocation.collect { value ->
-                mockLocation.apply(CoordinateParser.parse(value))
+                if (value == MOCK_BLOCKED) {
+                    mockLocation.apply(null)
+                    MockLocationState.status.value = MockStatus.BLOCKED
+                    Policy.applyLocationBlock(this@TunnelVpnService, blocked = true)
+                } else {
+                    Policy.applyLocationBlock(this@TunnelVpnService, blocked = false)
+                    mockLocation.apply(CoordinateParser.parse(value))
+                }
             }
         }
     }

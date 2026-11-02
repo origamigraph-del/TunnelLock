@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-02-mock-location",
+  "id": "2026-11-02-location-modes",
   "priority": "recommended",
-  "fa": "موقعیت جعلی (Fake GPS) برای فضای امن: می‌توانی یک مختصات یا لینک نقشهٔ گوگل بگذاری تا اپ‌های فضای امن آن موقعیت را ببینند (اختیاری، پیش‌فرض خاموش). یک موقعیت برای همهٔ اپ‌هاست، نه جدا برای هر اپ؛ و باید در گزینه‌های برنامه‌نویس TunnelLock را به‌عنوان mock location app انتخاب کنی.",
-  "en": "Fake GPS location for the secure space: set a coordinate or a Google Maps link and the apps in the secure space read that place (optional, off by default). One location for all of them, not per app, and you must pick TunnelLock as the mock location app in Developer Options."
+  "fa": "موقعیت فضای امن سه حالت شد: واقعی، جعلی، یا «بدون موقعیت». در حالت جعلی، provider «fused» (که از Wi-Fi و دکل می‌خواند) هم جعل می‌شود تا موقعیت واقعی از آن راه هم بیرون نرود. حالت «بدون موقعیت» موقعیت را کامل از اپ‌های فضای امن می‌گیرد.",
+  "en": "The secure space's location now has three modes: real, fake, or no location. In fake mode the \"fused\" provider (fed by Wi-Fi and cell) is faked too, so the real position cannot leak through it. \"No location\" withholds location from the secure-space apps entirely."
 }

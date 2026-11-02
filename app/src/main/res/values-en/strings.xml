@@ -271,4 +271,7 @@
     <string name="mock_needs_dev">Pick TunnelLock as the "mock location app" in Developer Options.</string>
     <string name="mock_open_dev">Open Developer Options</string>
     <string name="mock_turn_off">Turn off</string>
+    <string name="mock_mode_real">Real location (default)</string>
+    <string name="mock_mode_fake">Fake location</string>
+    <string name="mock_mode_blocked">No location (blocked): secure-space apps get no location, fake or real</string>
 </resources>
