@@ -63,4 +63,25 @@ class CoordinatesTest {
         val c = parse("35.6892, 51.389")!!
         assertEquals(c, parse(c.format()))
     }
+
+    @Test
+    fun persianDigits() {
+        val c = parse("۳۵.۶۸۹۲, ۵۱.۳۸۹")!!
+        assertEquals(35.6892, c.latitude, 1e-9)
+        assertEquals(51.389, c.longitude, 1e-9)
+    }
+
+    @Test
+    fun persianDigitsWithArabicDecimalAndComma() {
+        // ۳۵٫۶۸۹۲،۵۱٫۳۸۹ with the Arabic decimal mark and Arabic comma.
+        val c = parse("۳۵٫۶۸۹۲،۵۱٫۳۸۹")!!
+        assertEquals(35.6892, c.latitude, 1e-9)
+        assertEquals(51.389, c.longitude, 1e-9)
+    }
+
+    @Test
+    fun looksLikeUrl() {
+        assertEquals(true, CoordinateParser.looksLikeUrl("https://maps.app.goo.gl/abc"))
+        assertEquals(false, CoordinateParser.looksLikeUrl("35.6, 51.3"))
+    }
 }
