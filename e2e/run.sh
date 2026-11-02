@@ -439,6 +439,19 @@ else
     pass "Fake location off" "no location is fed once turned off"
 fi
 
+# ---- 5e. Open a link in the secure space ---------------------------------------------
+
+m=$(applines)
+sh_ am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "https://activate.e2e.test/go?t=secrettoken" -n $APP/.strict.ShareLinkActivity >/dev/null 2>&1
+sleep 6
+if applog | tail -n +"$((m + 1))" | grep -qE "OpenLink: opened a link in the secure space|OpenLink: no app in the secure space opened"; then
+    pass "Open link in secure space" "a link shared on the personal side reached the secure space"
+else
+    fail "Open link in secure space" "the link did not reach the secure space: $(applog | tail -n +"$((m + 1))" | grep -i openlink | tail -3 | cut -c1-140 | tr '\n' ' ')"
+fi
+# A one-time token in the link must never be written to the log.
+if applog | grep -q "secrettoken"; then fail "Link token kept out of the log" "the token was logged"; else pass "Link token kept out of the log" "the link's token is not in the log"; fi
+
 # ---- 6. OpenVPN -----------------------------------------------------------------------
 
 from=$(applines)

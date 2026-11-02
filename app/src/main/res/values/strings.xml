@@ -285,4 +285,13 @@
     <string name="mock_mode_real">موقعیت واقعی (پیش‌فرض)</string>
     <string name="mock_mode_fake">موقعیت جعلی</string>
     <string name="mock_mode_blocked">بدون موقعیت (مسدود): اپ‌های فضای امن هیچ موقعیتی نگیرند، نه جعلی نه واقعی</string>
+    <string name="open_link_share_label">باز کردن در فضای امن</string>
+    <string name="open_link_sent">لینک به فضای امن فرستاده شد</string>
+    <string name="open_link_open_space">اول یک‌بار TunnelLock داخل فضای امن را باز کن، بعد دوباره لینک را بفرست.</string>
+    <string name="open_link_no_url">لینکی پیدا نشد.</string>
+    <string name="open_link_none">هیچ اپی در فضای امن این لینک را باز نکرد. مطمئن شو نسخهٔ آن اپ داخل فضای امن نصب است.</string>
+    <string name="hub_open_link_title">باز کردن لینک در فضای امن</string>
+    <string name="hub_open_link_hint">لینک فعال‌سازی ایمیل را به‌جای زدن، اینجا بگذار (یا از منوی اشتراک‌گذاری «باز کردن در فضای امن» را بزن) تا به‌جای نسخهٔ عادی، نسخهٔ داخل فضای امن بازش کند.</string>
+    <string name="hub_open_link_field">لینک</string>
+    <string name="hub_open_link_button">باز کردن در فضای امن</string>
 </resources>
