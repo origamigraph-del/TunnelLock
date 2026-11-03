@@ -27,9 +27,8 @@ class MainActivity : ComponentActivity() {
         inSecureSpace = Policy.isProfileOwner(this)
         // Profiles created by older versions get the current rules too.
         if (inSecureSpace) Policy.ensurePolicies(this)
-        // Resume the fake location if one is set. It only reaches apps in the same Android
-        // user, so to fake the secure-space apps it must run in the secure space itself -- the
-        // app starts it here, in the foreground, where Android allows a foreground service.
+        // Resume the fake location if one is set (started from the foreground, which Android
+        // allows). In the personal profile this is the device-wide mock that reaches every app.
         if (CoordinateParser.parse((application as TunnelLockApp).store.mockLocation.value) != null) {
             runCatching { MockLocationService.start(this) }
         }
