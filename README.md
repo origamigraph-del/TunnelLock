@@ -1,141 +1,120 @@
 # TunnelLock
 
-اپ اندروید **بدون نیاز به روت** که اپ‌های انتخابی شما را فقط و فقط از طریق VPN (V2Ray / Xray یا OpenVPN) به اینترنت وصل می‌کند.
-اگر VPN حتی یک لحظه قطع شود، اینترنت آن اپ‌ها قطع است؛ اپ بسته نمی‌شود و با برگشتن اتصال دوباره کار می‌کند.
+[![Build APK](https://github.com/origamigraph-del/TunnelLock/actions/workflows/build.yml/badge.svg)](https://github.com/origamigraph-del/TunnelLock/actions/workflows/build.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/origamigraph-del/TunnelLock?sort=semver)](https://github.com/origamigraph-del/TunnelLock/releases/latest)
 
-## چطور کار می‌کند (حالت سخت‌گیرانه)
+**A no-root Android app that forces the apps you choose to reach the internet _only_ through a VPN (V2Ray / Xray, OpenVPN, or SSH).** If the VPN drops for even a moment, those apps have no internet — but they are not closed, and they recover the instant the tunnel is back.
 
-- TunnelLock یک **فضای امن** (Work Profile اندروید) می‌سازد و مالک آن می‌شود.
-- اپ‌هایی که باید محافظت شوند داخل این فضا کپی می‌شوند.
-- برای این فضا **Always-on VPN + Lockdown** فعال می‌شود. یعنی خود اندروید تضمین می‌کند اپ‌های داخل آن جز از طریق VPN ما هیچ راهی به اینترنت ندارند، حتی اگر TunnelLock کرش کند.
-- تونل (TUN) همیشه برقرار است. اگر سرور قطع شود، بسته‌ها داخل تونل دور ریخته می‌شوند و هیچ مسیر مستقیمی در کانفیگ Xray وجود ندارد.
-- قطع شدن اتصال وسط کار هیچ‌وقت اپ را نمی‌بندد؛ فقط اینترنتش قطع می‌شود.
-- وقتی قطع هستید، رابط VPN بسته می‌شود (علامت VPN در نوار بالا نمی‌ماند) و خود اندروید با lockdown همه‌چیز را مسدود می‌کند.
-- اگر اپی هم داخل و هم بیرون فضای امن نصب باشد، TunnelLock بیرونی هشدار می‌دهد: نسخهٔ بیرونی محافظت ندارد و با یک دکمه حذف می‌شود.
-- با VPN گوشی (در محیط عادی) تداخل ندارد: رابط TunnelLock آدرس مخصوص خودش را دارد (`10.233.97.1/30`، نه پیش‌فرض sing-box که Hiddify و NekoBox استفاده می‌کنند)، و VPN دیگری که شبکهٔ پیش‌فرض TunnelLock به نظر بیاید نادیده گرفته می‌شود. هر تغییر شبکه و هر اتصال دوباره با دلیلش در لاگ ثبت می‌شود.
-- با صفحهٔ خاموش، اتصال هر یک دقیقه بررسی می‌شود (نه هر ۱۵ ثانیه) و با روشن شدن صفحه فوراً؛ در تنظیمات قابل خاموش کردن است.
-- اگر «برنامه‌های کاری» خاموش باشد، TunnelLock بیرونی هشدار می‌دهد؛ بعد از روشن شدن، لاگ می‌نویسد TunnelLock چه مدت اجرا نمی‌شد.
-- لاگ برنامه هر ۱۵ دقیقه وضعیت باتری را ثبت می‌کند (درصد، جریان، دما، CPU خود برنامه و OpenVPN، حجم داده، روشن/خاموش بودن صفحه) تا مصرف باتری بهینه شود.
-- وقتی خودتان VPN را قطع می‌کنید (یا گوشی تازه روشن شده و هنوز وصل نیست)، اپ‌ها با `setPackagesSuspended` متوقف می‌شوند و باز نمی‌شوند. این رفتار در تنظیمات قابل خاموش کردن است.
-- اپ‌های معمولی گوشی (بیرون از فضای امن) هیچ تغییری نمی‌کنند.
+Think **Proxifier for Android, without root**: per-app routing, a real kill-switch enforced by Android itself, and optional device-wide fake GPS.
 
-### هر اپ از سرور خودش (مثل Proxifier)
+🇮🇷 **فارسی:** راهنمای کامل به زبان فارسی در [`README.fa.md`](README.fa.md) و [`docs/USER_GUIDE.fa.md`](docs/USER_GUIDE.fa.md).
 
-- در بخش اپ‌ها روی هر اپ بزنید و «سرور این اپ» را انتخاب کنید. پیش‌فرض برای همه «سرور اصلی» است.
-- آن اپ **فقط** از سرور خودش به اینترنت می‌رود (DNS آن هم). اگر سرورش قطع شود، اینترنت ندارد و هیچ‌وقت سراغ سرور اصلی نمی‌رود. بقیهٔ اپ‌ها روی سرور اصلی می‌مانند.
-- اتصالی که معلوم نیست مال کدام اپ است، دور ریخته می‌شود (به جز DNS)، تا هیچ ترافیکی از سرور اشتباه نرود. وقتی اپی سرور جدا دارد، دامنه‌ای که Xray از ترافیک تشخیص می‌دهد فقط برای مسیریابی است و آدرس اتصال عوض نمی‌شود (`routeOnly`)، چون اپِ هر اتصال از روی همان آدرس پیدا می‌شود.
-- اگر سرور اصلی نتواند اپ‌ها را جدا کند (OpenVPN، کانفیگ JSON با FakeDNS، یا اندروید ۹)، آن اپ‌ها از تونل بیرون گذاشته می‌شوند تا lockdown اندروید قطعشان کند؛ اگر lockdown خاموش باشد، TunnelLock اصلاً وصل نمی‌شود.
-- سرور هر اپ باید V2Ray باشد (لینک معمولی؛ نه OpenVPN و نه کانفیگ کامل JSON). وقتی سرور اصلی OpenVPN است، اپ‌هایی که سرور جدا دارند اینترنت ندارند. اندروید ۱۰ به بالا لازم است.
-- اندروید به TunnelLock می‌گوید هر اتصال مال کدام اپ است (`getConnectionOwnerUid`) و Xray با قانون `process` آن را به سرور همان اپ می‌فرستد.
+---
 
-### SSH
+## ⚠️ Before you start
 
-- در بخش سرورها «سرور SSH» را بزنید: آدرس، پورت، نام کاربری، رمز و/یا کلید خصوصی. لینک `ssh://user:pass@host:port?transport=...#name` را هم می‌شود چسباند.
-- نوع اتصال: **مستقیم**، **TLS/SSL** (SSH داخل TLS با SNI دلخواه، مثل stunnel)، **WebSocket** و **WebSocket + TLS** (درخواست upgrade با Host و path، بعد SSH؛ برای سرورهای پشت CDN).
-- TunnelLock خودش به SSH وصل می‌شود و یک پراکسی SOCKS محلی با رمز تصادفی می‌سازد؛ Xray ترافیک اپ‌ها را به آن می‌دهد و هر اتصال با یک کانال `direct-tcpip` از طرف سرور باز می‌شود. kill switch و قطع اینترنت هنگام قطع سرور مثل بقیه است.
-- **کلید سرور**: بار اول به خاطر سپرده می‌شود (یا در لینک با `hostkey=SHA256:...` ثابت می‌شود). اگر بعداً سرور دیگری جواب بدهد، وصل نمی‌شود. TLS و WebSocket فقط پوشش‌اند؛ چیزی که سرور را ثابت می‌کند همین کلید است.
-- SSH فقط TCP را می‌برد؛ UDP رد می‌شود (DNS از طریق Xray روی TCP می‌رود). تماس‌های صوتی/تصویری که فقط UDP دارند ممکن است کار نکنند.
+- **This is a power tool.** It creates an Android Work Profile, installs app copies into it, runs a VPN, and (optionally) mocks your location. That combination is legitimate but unusual.
+- **Google Play Protect will warn** when you install it ("This app could be harmful"). That is a *reputation/heuristic* warning for a sideloaded app with sensitive permissions — not a malware detection. You can tap **Install anyway**. See [Permissions & Play Protect](#permissions--play-protect) for why each permission is needed.
+- **Do not uninstall TunnelLock** to "turn it off" — uninstalling deletes the secure space and every app inside it. Just disconnect.
 
-### باز کردن لینک فعال‌سازی در فضای امن
+---
 
-- وقتی اپی هم در فضای امن است و هم در محیط عادی، لینک فعال‌سازیِ ایمیل (که در محیط عادی باز می‌شود) نسخهٔ **عادی** اپ را باز می‌کند، با IP و موقعیت اشتباه.
-- راه‌حل: لینک را **نزن**؛ به‌جایش یا در TunnelLock بیرونی بخش «باز کردن لینک در فضای امن» بگذار، یا از منوی اشتراک‌گذاری اندروید «باز کردن در فضای امن» را بزن. TunnelLock آن را به فضای امن می‌فرستد تا نسخهٔ داخل فضای امن بازش کند.
-- این کار از طریق فورواردر بین‌پروفایلی خود اندروید انجام می‌شود؛ روی گوشی‌هایی که آن را قبول نمی‌کنند (سامسونگ)، لینک از همان راهِ کلیپ‌بوردی که کپی اپ‌ها استفاده می‌کند به فضای امن می‌رود. هیچ تغییری در باز شدن لینک‌های بقیهٔ گوشی نمی‌دهد و لازم نیست نسخهٔ عادی اپ را حذف کنی.
-- توکن یک‌بارمصرف داخل لینک در لاگ ذخیره نمی‌شود.
+## Features
 
-### موقعیت جعلی (Fake GPS)
+- **Strict per-app VPN** — chosen apps live in an Android Work Profile with **always-on VPN + lockdown**, so Android itself guarantees they cannot reach the internet except through the tunnel, even if TunnelLock crashes.
+- **Real kill-switch** — if the server drops, packets are discarded inside the tunnel; there is no direct route. Apps stay open, just offline, and recover automatically.
+- **Per-app servers (Proxifier-style)** — route each app through its own server; unattributable connections are dropped so nothing leaks via the wrong exit.
+- **Protocols** — V2Ray/Xray (VLESS, VMess, Trojan, Shadowsocks, full JSON config, subscriptions, QR), **OpenVPN** (`.ovpn`), and **SSH** (direct, TLS, WebSocket, WS+TLS).
+- **Device-wide fake GPS** — set a location from the normal app and every app on the phone, the secure-space apps included, reads it. Pick the point by typing coordinates, pasting a Maps link, or **choosing it on an OpenStreetMap map**.
+- **Open activation links in the secure space** — so an email link opens the *protected* copy of an app, with the right IP/location, not the normal one.
+- **Update feed** — the app checks for new builds and tells you how urgent each one is.
+- **TunnelProbe** — a bundled leak-tester so you can verify, yourself, that traffic really is blocked when the VPN is down.
 
-- اندروید فقط به اپ‌های محیط عادی اجازه می‌دهد «اپ موقعیت ساختگی» شوند، نه اپ‌های داخل فضای امن. برای همین موقعیت جعلی از **TunnelLock عادی** اجرا می‌شود و چون providerهای موقعیت سراسری‌اند، **موقعیتِ کل گوشی** (از جمله اپ‌های فضای امن) عوض می‌شود. تا وقتی روشن است، موقعیت همه‌جا جعلی است.
-- در TunnelLock عادی بخش «موقعیت جعلی (کل گوشی)»، یک مختصات یا لینک نقشه بگذار و روشن کن. یک‌بار باید در «گزینه‌های برنامه‌نویس» این برنامه را به‌عنوان mock location app انتخاب کنی.
-- همهٔ providerها (GPS، شبکه، fused، passive) جعل می‌شوند تا موقعیت واقعی از هیچ راهی بیرون نرود.
-- داخل فضای امن، تنظیمات موقعیت فقط «واقعی» یا «بدون موقعیت» است (بدون موقعیت = اجازهٔ موقعیت از اپ‌های فضای امن گرفته می‌شود).
-- TunnelProbe موقعیتی که اپ‌های فضای امن واقعاً می‌خوانند را در گزارش می‌نویسد (خط `-- location:`)، تا خودت ببینی جعل رسیده و واقعی نشت نکرده.
+See the [User guide](docs/USER_GUIDE.md) for step-by-step instructions.
 
+---
 
-### OpenVPN
+## How it works (strict mode)
 
-- در بخش سرورها «فایل OpenVPN» را بزنید و فایل `.ovpn` را باز کنید (یا متن آن را کپی و «از کلیپ‌بورد» را بزنید).
-- اگر سرور نام کاربری و رمز بخواهد، همان موقع پرسیده می‌شود و فقط داخل فضای امن ذخیره می‌شود. بعداً با دکمهٔ ✎ کنار سرور قابل ویرایش است.
-- گواهی‌ها و کلیدها باید داخل خود فایل باشند (inline). حالت TAP پشتیبانی نمی‌شود.
-- kill switch همان است: تا OpenVPN واقعاً وصل نشده، تونل خود TunnelLock همه‌چیز را مسدود نگه می‌دارد، و تونل OpenVPN هم کل IPv4 و IPv6 را می‌گیرد.
-- اگر بعد از ۲۰ ثانیه وصل نشده باشد، صفحهٔ اصلی می‌گوید چرا: یا سرور اصلاً جواب نمی‌دهد (آدرس، پورت یا کلید اشتباه، یا سرور خاموش/مسدود)، یا جواب داده ولی اتصال وسط راه گیر کرده، که معمولاً یعنی اینترنت OpenVPN را فیلتر می‌کند.
+- TunnelLock creates a **secure space** (Android Work Profile) and becomes its owner.
+- The apps you want to protect are copied into that space.
+- The space gets **always-on VPN + lockdown**: Android guarantees those apps have no path to the internet except our VPN.
+- The TUN interface is always up. If the server drops, packets inside the tunnel are discarded and there is no direct route in the Xray config.
+- A mid-session drop never closes an app — only its internet stops. While disconnected, the VPN interface is torn down (no VPN key icon lingering) and Android's lockdown blocks everything.
+- It does **not** clash with a phone-wide VPN in the normal profile: TunnelLock's interface uses its own address range (`10.233.97.1/30`), and another VPN that looks like TunnelLock's default network is ignored. Every network change and reconnect is logged with its reason.
+- Normal (non-secure-space) apps are completely unaffected.
 
-## نصب
+---
 
-1. آخرین نسخه را مستقیم در مرورگر گوشی (با حساب GitHub واردشده) باز و نصب کنید:
-   - TunnelLock: https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelLock.apk
-   - TunnelProbe: https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelProbe.apk
+## Install
 
-   این لینک‌ها همیشه جدیدترین نسخه را می‌دهند. برای آپدیت هم همین لینک را باز کنید.
-2. اپ را باز کنید و «ساخت فضای امن» را بزنید.
-3. TunnelLock داخل فضای امن (آیکون با نشان کیف) باز می‌شود:
-   - **سرورها**: لینک `vless://`، `vmess://`، `trojan://` یا `ss://` را کپی کنید و «از کلیپ‌بورد» را بزنید. لینک اشتراک، QR و کانفیگ JSON کامل Xray هم پشتیبانی می‌شود.
-   - **اتصال**: دکمه بزرگ را بزنید.
-4. **افزودن اپ‌ها**: TunnelLock **بیرونی** (بدون نشان کیف) را باز کنید، اپ‌ها را تیک بزنید و «افزودن به فضای امن» را بزنید. اندروید برای هر اپ تأیید نصب می‌خواهد. (فقط نسخهٔ بیرونی می‌تواند اپ‌های گوشی را ببیند.)
+1. On the phone, open the latest APKs directly (signed in to GitHub) and install:
+   - **TunnelLock:** <https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelLock.apk>
+   - **TunnelProbe** (optional leak-tester): <https://github.com/origamigraph-del/TunnelLock/releases/latest/download/TunnelProbe.apk>
 
-## خبر نسخهٔ جدید
+   These links always serve the newest version; use the same link to update.
+2. Play Protect will warn — tap **Install anyway** (then **Install**).
+3. Open the app and tap **Create secure space**.
+4. Inside the secure space (briefcase-badged icon): add your **server**, then **Connect**.
+5. **Add apps:** open the *normal* TunnelLock (no badge), tick the apps, **Add to the secure space** (Android asks to confirm each install — only the normal copy can see your installed apps).
 
-- TunnelLock داخل فضای امن هر ۱۲ ساعت نسخهٔ جدید را بررسی می‌کند (تنظیمات › به‌روزرسانی › «بررسی الان» هم هست). TunnelLock بیرونی هر بار که باز شود بررسی می‌کند و دکمهٔ دانلود را نشان می‌دهد؛ نصب در محیط عادی هر دو نسخه را به‌روز می‌کند.
-- هر نسخه اولویت دارد و اعلان بر اساس آن است:
-  - **فوری**: نشت یا امنیت؛ هر روز یادآوری تا نصب شود.
-  - **مهم**: بدون آن سرورها/پروتکل‌هایی کار نمی‌کنند یا باگ جدی؛ هر ۳ روز یادآوری.
-  - **پیشنهادی**: قابلیت یا بهبود جدید؛ یک بار.
-  - **اختیاری**: تغییر کوچک؛ فقط در تنظیمات.
-- اگر چند نسخه عقب باشید، بالاترین اولویت بین آن‌ها حساب می‌شود (یک اصلاح فوری عقب‌مانده فوری می‌ماند).
-- اگر سرورهای اشتراک شما پروتکل یا تنظیمی داشته باشند که این نسخه نمی‌شناسد، این هم گفته می‌شود و اولویت نسخهٔ جدید دست‌کم «مهم» می‌شود.
-- هر هفته GitHub بررسی می‌کند Xray یا OpenVPN نسخهٔ تازه دارند یا نه (`.github/workflows/upstream.yml`)؛ اگر جدیدترین TunnelLock عقب باشد، اپ می‌گوید ساخت جدید لازم است.
-- منبع خبرها issue «TunnelLock updates» همین ریپو است و فقط کامنت‌های خود GitHub Actions (`github-actions[bot]`) پذیرفته می‌شوند. لینک دانلود همیشه همان لینک ثابت release است، نه چیزی از متن خبر.
-- برای انتشار: قبل از ادغام در `main`، فایل `release/notes.json` را با `id` تازه، اولویت و متن فارسی/انگلیسی به‌روز کنید؛ اگر `id` تغییر نکند، آن ساخت اعلام نمی‌شود.
+Full walkthrough: [docs/USER_GUIDE.md](docs/USER_GUIDE.md).
 
-## تست نشت با TunnelProbe
+---
 
-در هر Release یک `TunnelProbe.apk` هم هست: اپ کوچکی برای اینکه خودتان ببینید ترافیک واقعاً قطع می‌شود یا نه.
+## Permissions & Play Protect
 
-1. TunnelProbe را نصب کنید و با TunnelLock بیرونی به فضای امن اضافه کنید.
-2. نسخهٔ داخل فضای امن را باز کنید، VPN را وصل کنید و «شروع تست» را بزنید. هر چند ثانیه چهار مسیر جدا را امتحان می‌کند: HTTPS با IP، HTTPS با DNS، ipify (IPv4/IPv6) و UDP (STUN).
-3. سرور را قطع کنید، شبکه را عوض کنید یا حالت هواپیما بزنید. باید فقط «مسدود» ببینید. «نشت» یعنی ترافیک با IP ایران (یا IP واقعی‌ای که وارد کرده‌اید) خارج شده است.
-4. «کپی گزارش» را بزنید و بفرستید.
+TunnelLock requests exactly the permissions its features need. This transparency is also why Play Protect flags it — the combination is powerful:
 
-**حالت دقیق** (اختیاری، پیش‌فرض خاموش): کنار تست‌های بالا، هر ثانیه یک پینگ کوچک UDP (STUN) از داخل تونل می‌فرستد. هر وقت بیش از ۲٫۵ ثانیه جوابی نیاید، در گزارش یک خط `~~ BREAK` با ساعت شروع و پایان قطعی ثبت می‌شود؛ تک‌پینگ‌های گم‌شده، کندترین جواب و تعداد قطعی‌ها هر ۱۵ دقیقه خلاصه می‌شوند. اگر خود اندروید TunnelProbe را خوابانده باشد، همان خط این را می‌گوید تا با قطعی شبکه اشتباه نشود. برای تست یک‌روزه با فاصلهٔ ۳۰ یا ۶۰ ثانیه روشنش کنید.
-
-> نسخه‌های بعدی را روی همین نسخه نصب کنید (آپدیت). **TunnelLock را حذف نکنید**؛ حذف آن فضای امن و اپ‌های داخلش را هم پاک می‌کند.
-
-## تست خودکار روی گوشی مجازی
-
-هر بار که شاخهٔ `e2e` به‌روز شود، GitHub یک گوشی اندروید مجازی بالا می‌آورد (`.github/workflows/e2e.yml` و `e2e/`):
-- کنار گوشی یک سرور واقعی V2Ray (Xray) و یک سرور واقعی OpenVPN با نام کاربری و رمز اجرا می‌شود.
-- فضای امن با TunnelLock ساخته می‌شود و TunnelProbe داخل آن هر چند ثانیه اینترنت را امتحان می‌کند.
-- سناریوها: اتصال با هر دو پروتکل، یخ زدن ۵ ثانیه‌ای سرور (حالت دقیق باید یک قطعی حدود ۵ ثانیه ثبت کند)، خاموش شدن سرور وسط کار، کشته شدن خود TunnelLock، قطع دستی، فیلتر شدن OpenVPN وسط اتصال (باید پیام روشن بدهد)، رمز اشتباه OpenVPN، SSH (مستقیم، TLS، WebSocket، قطع سرور، رمز اشتباه و عوض شدن کلید سرور)، و یک اپ روی سرور جدا (ترافیکش فقط باید به سرور خودش برسد، با قطع آن سرور اینترنت نداشته باشد و زیر OpenVPN کاملاً قطع باشد).
-- در هر حالتی که VPN کار نمی‌کند، حتی یک درخواست هم نباید بیرون برود؛ وقتی وصل است، درخواست‌ها باید از سرور تست عبور کنند.
-
-## ارسال مستقیم گزارش‌ها
-
-TunnelLock (تنظیمات › گزارش‌ها › ارسال) و TunnelProbe (بعد از هر تست، خودکار) گزارش را به‌صورت کامنت در [issue #1](https://github.com/origamigraph-del/TunnelLock/issues/1) همین ریپو می‌فرستند.
-هر دو گزارش یک روز کامل را نگه می‌دارند. اگر گزارش برای یک کامنت بزرگ باشد، اولین کامنت آخرین خطوط را خوانا نشان می‌دهد و کل گزارش در چند کامنت فشرده (gzip + base64) می‌آید: همهٔ بخش‌ها را به ترتیب کنار هم بگذارید و `base64 -d | gunzip` بزنید. برای فعال شدن، سکرت `LOG_TOKEN` لازم است: یک fine-grained token که فقط به همین ریپو و فقط مجوز **Issues: Read and write** دارد.
-
-## ساختار کد
-
-| مسیر | توضیح |
+| Permission | Why |
 |---|---|
-| `core/` | Kotlin خالص: پارسر لینک‌ها و سازندهٔ کانفیگ Xray (تست‌شده) |
-| `app/.../vpn/` | `TunnelVpnService` (تونل + kill switch)، wrapper هستهٔ Xray، `OpenVpnEngine` |
-| `native/` | ساخت OpenVPN برای اندروید از سورس‌های قفل‌شده (فقط در CI) |
-| `app/.../strict/` | فضای امن: provisioning، lockdown، تعلیق و کپی اپ‌ها |
-| `app/.../ui/` | رابط کاربری (Jetpack Compose، فارسی/انگلیسی) |
-| `probe/` | TunnelProbe: اپ تست نشت |
-| `docs/PLAN.md` | پلن کامل پروژه |
+| Device admin / managed profile | Create and own the secure space (Work Profile), set always-on VPN + lockdown. |
+| `BIND_VPN_SERVICE` | The tunnel itself. |
+| `REQUEST_INSTALL_PACKAGES` / `REQUEST_DELETE_PACKAGES` | Copy chosen apps into the secure space and remove the unprotected outside copy. |
+| `QUERY_ALL_PACKAGES` | List your installed apps so you can pick which to protect. |
+| `ACCESS_MOCK_LOCATION`, `ACCESS_FINE/COARSE_LOCATION` | Optional device-wide fake GPS (off by default). |
+| `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE*` | Keep the kill-switch and tunnel reliable. |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | One-tap battery exemption so Android doesn't kill the tunnel. |
+| `INTERNET`, `ACCESS_NETWORK_STATE` | Networking; detect network changes. |
 
-هستهٔ Xray از [AndroidLibXrayLite](https://github.com/2dust/AndroidLibXrayLite) گرفته می‌شود (همان هستهٔ v2rayNG). CI آن را با checksum ثابت دانلود می‌کند.
-OpenVPN 2.6 (با OpenSSL، LZO و LZ4) را CI از سورس‌هایی با commit ثابت می‌سازد (`native/build-openvpn.sh`) و به‌صورت `libovpnexec.so` داخل APK می‌گذارد.
+**The Play Protect warning cannot be fully removed for a sideloaded app with these capabilities** — it is inherent to what the app does. Mitigations: install from these official release links, verify the APK (open source — build it yourself), keep the same signing key so reputation builds over time, and optionally appeal to Google via their Play Protect "incorrect warning" form.
 
-## Build
+---
 
-Builds run on GitHub Actions (`.github/workflows/build.yml`): every push to `main` runs the core tests, builds a signed release APK and publishes it as a pre-release.
+## Build & develop
 
-Locally: put `libv2ray.aar` (see the workflow for version and SHA-256) in `app/libs/`, build OpenVPN with `native/build-openvpn.sh <android-ndk> app/src/main/jniLibs`, then `./gradlew :core:test :app:assembleRelease`.
+Builds run on GitHub Actions (`.github/workflows/build.yml`): every push to `main` runs the core tests, builds a signed release APK, and publishes it.
 
-**Signing:** `signing/release.jks` is the release key, encrypted with a password that lives only in the `SIGNING_PASSWORD` repository secret (Settings › Secrets and variables › Actions). Every build must use this key so it can update the installed app in place; a new key would mean uninstalling, which deletes the secure space. Without the secret, CI still builds (debug-signed) but does not publish a release.
+Local build:
+```bash
+# 1. Xray core (version + SHA-256 are pinned in build.yml)
+mkdir -p app/libs && curl -fsSL -o app/libs/libv2ray.aar <url-from-build.yml>
+# 2. OpenVPN native binary
+native/build-openvpn.sh <android-ndk> app/src/main/jniLibs
+# 3. Build
+./gradlew :core:test :app:assembleRelease :probe:assembleRelease
+```
 
-## License note
+Architecture, routing internals, the secure-space model, the mock-location mechanism, CI/e2e, and the release/signing process are documented in **[docs/DEVELOPING.md](docs/DEVELOPING.md)** and **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
 
-Xray-core is MPL-2.0. OpenVPN is GPLv2 (with the OpenSSL exception); it runs as a separate program that the app talks to over its management socket. Distributing the APK publicly requires offering OpenVPN's source (the pinned upstream release) under the GPL.
+### Project layout
+
+| Path | What |
+|---|---|
+| `core/` | Pure Kotlin: link parsers and the Xray config builder (unit-tested) |
+| `app/.../vpn/` | `TunnelVpnService` (tunnel + kill-switch), Xray core wrapper, `OpenVpnEngine`, `MockLocation` |
+| `app/.../strict/` | Secure space: provisioning, lockdown, app copy/suspend, cross-profile hand-off |
+| `app/.../ui/` | UI (Jetpack Compose, English + Persian) |
+| `native/` | Builds OpenVPN for Android from pinned sources (CI only) |
+| `probe/` | TunnelProbe leak-tester |
+| `e2e/` | On-emulator end-to-end test harness |
+| `docs/` | User and developer documentation |
+
+---
+
+## License
+
+TunnelLock is free software under the **GNU GPL v3** — see [LICENSE](LICENSE).
+
+It bundles third-party components under their own licenses (Xray-core MPL-2.0, OpenVPN GPL-2.0, JSch, Bouncy Castle, osmdroid, ZXing) and shows OpenStreetMap map tiles (© OpenStreetMap contributors). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The OpenVPN binary runs as a separate program; its GPL-2.0 source is reproducible from `native/build-openvpn.sh`.
