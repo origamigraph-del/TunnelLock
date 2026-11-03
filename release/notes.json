@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-03-map-picker",
+  "id": "2026-11-03-fake-locations",
   "priority": "recommended",
-  "fa": "انتخاب موقعیت جعلی از روی نقشه اضافه شد: در TunnelLock عادی می‌توانی روی نقشهٔ OpenStreetMap محل را انتخاب کنی تا مختصات خودش پر شود (بدون نیاز به گوگل). جعل موقعیت از نسخهٔ عادی اجرا می‌شود و کل گوشی، از جمله اپ‌های فضای امن، همان موقعیت را می‌بینند.",
-  "en": "Pick the fake location on a map: in the normal TunnelLock you can now choose the spot on an OpenStreetMap map and the coordinates fill in (no Google needed). The fake runs from the personal copy and the whole phone, secure-space apps included, reads that location."
+  "fa": "موقعیت جعلی بهتر شد: مکان‌ها را با نام ذخیره کن و از لیست انتخاب کن (دیگر لازم نیست بعد از خاموش‌کردن از اول بزنی)، و داخل نقشه شهر یا منطقه را جستجو کن تا نقشه همان‌جا برود، بعد نقطه را انتخاب کن.",
+  "en": "Fake location improved: save places with a name and pick them from a list (no need to re-enter after turning it off), and search a city or area inside the map to jump there, then pick the point."
 }
