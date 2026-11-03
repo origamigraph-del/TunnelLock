@@ -309,4 +309,9 @@
     <string name="mock_map_hint">نقشه را جابه‌جا کن تا نشانهٔ وسط روی محل موردنظر بیفتد، بعد بزن «همین‌جا».</string>
     <string name="mock_map_confirm">همین‌جا</string>
     <string name="mock_map_cancel">انصراف</string>
+    <string name="mock_save">ذخیره</string>
+    <string name="mock_save_name">نام این مکان</string>
+    <string name="mock_saved_title">مکان‌های ذخیره‌شده</string>
+    <string name="mock_map_search">جستجوی شهر یا منطقه</string>
+    <string name="mock_map_search_none">چیزی پیدا نشد</string>
 </resources>

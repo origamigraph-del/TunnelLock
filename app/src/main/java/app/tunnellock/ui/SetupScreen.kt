@@ -27,8 +27,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -38,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -415,11 +418,15 @@ private fun MockLocationCard() {
     val store = (context.applicationContext as app.tunnellock.TunnelLockApp).store
     val current by store.mockLocation.collectAsStateWithLifecycle()
     val status by app.tunnellock.vpn.MockLocationState.status.collectAsStateWithLifecycle()
-    var text by remember(current) { mutableStateOf(current) }
+    // Start from the last point so re-enabling after a turn-off needs no re-entry.
+    var text by remember { mutableStateOf(current.ifBlank { store.lastMockLocation }) }
     val parsed = app.tunnellock.core.geo.CoordinateParser.parse(text)
     val on = current.isNotBlank()
+    val saved by store.savedLocations.collectAsStateWithLifecycle()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
     var showMap by remember { mutableStateOf(false) }
+    var showSave by remember { mutableStateOf(false) }
+    var saveName by remember { mutableStateOf("") }
     if (showMap) {
         MapPickerDialog(
             initial = parsed,
@@ -428,6 +435,31 @@ private fun MockLocationCard() {
                 text = String.format(java.util.Locale.US, "%.6f, %.6f", lat, lng)
                 showMap = false
             },
+        )
+    }
+    if (showSave && parsed != null) {
+        AlertDialog(
+            onDismissRequest = { showSave = false },
+            title = { Text(stringResource(R.string.mock_save)) },
+            text = {
+                OutlinedTextField(
+                    value = saveName,
+                    onValueChange = { saveName = it },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.mock_save_name)) },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = saveName.isNotBlank(),
+                    onClick = {
+                        store.saveLocation(saveName, parsed.latitude, parsed.longitude)
+                        saveName = ""
+                        showSave = false
+                    },
+                ) { Text(stringResource(R.string.mock_save)) }
+            },
+            dismissButton = { TextButton(onClick = { showSave = false }) { Text(stringResource(R.string.mock_map_cancel)) } },
         )
     }
     Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -446,11 +478,35 @@ private fun MockLocationCard() {
             placeholder = { Text("35.6892, 51.3890") },
             modifier = Modifier.fillMaxWidth(),
         )
-        OutlinedButton(onClick = { showMap = true }) { Text(stringResource(R.string.mock_pick_map)) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { showMap = true }) { Text(stringResource(R.string.mock_pick_map)) }
+            OutlinedButton(enabled = parsed != null, onClick = { saveName = ""; showSave = true }) {
+                Text(stringResource(R.string.mock_save))
+            }
+        }
         parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall) }
         if (parsed == null && text.isNotBlank()) {
             val why = if (app.tunnellock.core.geo.CoordinateParser.looksLikeUrl(text)) R.string.mock_link_no_coords else R.string.mock_bad_coords
             Text(stringResource(why), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        if (saved.isNotEmpty()) {
+            Text(stringResource(R.string.mock_saved_title), style = MaterialTheme.typography.labelMedium)
+            saved.forEach { loc ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(
+                        onClick = { text = String.format(java.util.Locale.US, "%.6f, %.6f", loc.lat, loc.lng) },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            "${loc.name}  (${String.format(java.util.Locale.US, "%.4f, %.4f", loc.lat, loc.lng)})",
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    IconButton(onClick = { store.removeSavedLocation(loc.name) }) {
+                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.mock_map_cancel))
+                    }
+                }
+            }
         }
         if (on && status == app.tunnellock.vpn.MockStatus.NEEDS_DEVELOPER_OPTION) {
             Text(stringResource(R.string.mock_needs_dev), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -475,7 +531,6 @@ private fun MockLocationCard() {
                 OutlinedButton(onClick = {
                     store.setMockLocation("")
                     app.tunnellock.vpn.MockLocationService.stop(context)
-                    text = ""
                 }) { Text(stringResource(R.string.hub_mock_stop)) }
             }
         }
@@ -520,6 +575,10 @@ private fun MapPickerDialog(
             mapView.onDetach()
         }
     }
+    val scope = rememberCoroutineScope()
+    var query by remember { mutableStateOf("") }
+    var searching by remember { mutableStateOf(false) }
+    var notFound by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
             AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
@@ -531,15 +590,54 @@ private fun MapPickerDialog(
                 drawLine(cross, Offset(w / 2f, 0f), Offset(w / 2f, h), strokeWidth = 2.dp.toPx())
                 drawLine(cross, Offset(0f, h / 2f), Offset(w, h / 2f), strokeWidth = 2.dp.toPx())
             }
-            Text(
-                stringResource(R.string.mock_map_hint),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(12.dp)
-                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                    .padding(8.dp),
-            )
+            Column(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                val runSearch = {
+                    if (query.isNotBlank() && !searching) {
+                        searching = true
+                        notFound = false
+                        scope.launch {
+                            val gp = geocode(context, query.trim())
+                            if (gp != null) {
+                                mapView.controller.setZoom(12.0)
+                                mapView.controller.animateTo(gp)
+                            } else {
+                                notFound = true
+                            }
+                            searching = false
+                        }
+                        Unit
+                    }
+                }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it; notFound = false },
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.mock_map_search)) },
+                    trailingIcon = {
+                        IconButton(onClick = { runSearch() }) {
+                            if (searching) {
+                                CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.mock_map_search))
+                            }
+                        }
+                    },
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { runSearch() }),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                    modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surface),
+                )
+                Text(
+                    if (notFound) stringResource(R.string.mock_map_search_none) else stringResource(R.string.mock_map_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (notFound) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                        .padding(6.dp),
+                )
+            }
             Row(
                 Modifier
                     .align(Alignment.BottomCenter)
@@ -561,6 +659,44 @@ private fun MapPickerDialog(
         }
     }
 }
+
+/**
+ * Finds a place by name for the map search. Tries Android's own geocoder first (its OS backend
+ * when present), then falls back to OpenStreetMap's Nominatim so search works without Google
+ * services. Runs off the main thread. Returns null when nothing is found.
+ */
+private suspend fun geocode(context: android.content.Context, query: String): org.osmdroid.util.GeoPoint? =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            if (android.location.Geocoder.isPresent()) {
+                @Suppress("DEPRECATION")
+                val hit = android.location.Geocoder(context).getFromLocationName(query, 1)?.firstOrNull()
+                if (hit != null) return@withContext org.osmdroid.util.GeoPoint(hit.latitude, hit.longitude)
+            }
+        }
+        runCatching {
+            val url = java.net.URL(
+                "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" +
+                    java.net.URLEncoder.encode(query, "UTF-8"),
+            )
+            val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                setRequestProperty("User-Agent", context.packageName)
+                connectTimeout = 8000
+                readTimeout = 8000
+            }
+            conn.inputStream.bufferedReader().use { reader ->
+                val arr = org.json.JSONArray(reader.readText())
+                if (arr.length() > 0) {
+                    val o = arr.getJSONObject(0)
+                    return@withContext org.osmdroid.util.GeoPoint(
+                        o.getString("lat").toDouble(),
+                        o.getString("lon").toDouble(),
+                    )
+                }
+            }
+        }
+        null
+    }
 
 @Composable
 private fun OpenLinkCard() {
