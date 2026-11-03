@@ -24,11 +24,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * Runs the fake location from the personal profile, where Android's Developer Options
- * can make TunnelLock the mock-location app (a work-profile app cannot be chosen there).
- * Because the location providers are device-wide, the chosen place is what every app
- * reads, the secure-space apps included — which is the only way to fake their location
- * without root. While on, the whole phone's location is the faked one.
+ * Feeds a user-set fake location to Android's location providers. A mock location only
+ * reaches apps in the SAME Android user, so to fake the secure-space apps this must run
+ * inside the secure space itself. Android's Developer Options can make only the personal
+ * copy the mock-location app, so the secure-space copy has to be granted that once over
+ * adb; with it, this service (started by the secure-space app) fakes the protected apps.
  */
 class MockLocationService : Service() {
 

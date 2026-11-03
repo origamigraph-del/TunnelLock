@@ -501,7 +501,10 @@ sh_ "mkdir -p $DATA/shared_prefs && cp /data/local/tmp/mock.xml $DATA/shared_pre
     && chown $uuid:$uuid $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml \
     && chmod 771 $DATA/shared_prefs && chmod 660 $DATA/shared_prefs/tunnellock.xml \
     && chcon $uctx $DATA/shared_prefs $DATA/shared_prefs/tunnellock.xml"
-sh_ am start-foreground-service --user "$U" -n $APP/.vpn.MockLocationService >/dev/null 2>&1
+# Open the secure-space app (exported launcher activity); on start it reads the pushed
+# coordinate and runs the mock service itself, in the foreground, inside user $U. Starting
+# the non-exported service straight from the shell is refused for a background work profile.
+sh_ am start --user "$U" -n $APP/.ui.MainActivity >/dev/null 2>&1
 
 # Wait for the secure-space app to accept the mock (its log is in user $U).
 mock_ok=""
