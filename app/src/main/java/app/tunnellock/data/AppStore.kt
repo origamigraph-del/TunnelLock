@@ -48,6 +48,9 @@ data class Subscription(
  */
 data class AppServer(val link: String, val name: String, val subscriptionId: String? = null)
 
+/** A named point the user saved for the fake-location picker. */
+data class SavedLocation(val name: String, val lat: Double, val lng: Double)
+
 data class SubscriptionUsage(
     val usedBytes: Long,
     /** 0 = unlimited. */
@@ -255,8 +258,49 @@ class AppStore(context: Context) {
     val mockLocation: StateFlow<String> = _mockLocation
 
     fun setMockLocation(value: String) {
-        _mockLocation.value = value.trim()
-        prefs.edit().putString(KEY_MOCK_LOCATION, value.trim()).apply()
+        val v = value.trim()
+        _mockLocation.value = v
+        val edit = prefs.edit().putString(KEY_MOCK_LOCATION, v)
+        // Keep the last point even after turning off, so it needn't be re-entered.
+        if (v.isNotEmpty()) edit.putString(KEY_LAST_MOCK_LOCATION, v)
+        edit.apply()
+    }
+
+    /** The last coordinate the fake location was set to, kept across turning it off. */
+    val lastMockLocation: String get() = prefs.getString(KEY_LAST_MOCK_LOCATION, "").orEmpty()
+
+    /** Named points saved for the fake-location picker. */
+    private val _savedLocations = MutableStateFlow(loadSavedLocations())
+    val savedLocations: StateFlow<List<SavedLocation>> = _savedLocations
+
+    private fun loadSavedLocations(): List<SavedLocation> = runCatching {
+        val arr = JSONArray(prefs.getString(KEY_SAVED_LOCATIONS, "[]"))
+        (0 until arr.length()).map { i ->
+            val o = arr.getJSONObject(i)
+            SavedLocation(o.getString("name"), o.getDouble("lat"), o.getDouble("lng"))
+        }
+    }.getOrDefault(emptyList())
+
+    private fun persistSavedLocations(list: List<SavedLocation>) {
+        val arr = JSONArray()
+        list.forEach { arr.put(JSONObject().put("name", it.name).put("lat", it.lat).put("lng", it.lng)) }
+        prefs.edit().putString(KEY_SAVED_LOCATIONS, arr.toString()).apply()
+    }
+
+    /** Saves (or replaces by name) a named point; newest last. */
+    fun saveLocation(name: String, lat: Double, lng: Double) {
+        val cleaned = name.trim()
+        if (cleaned.isEmpty()) return
+        val list = _savedLocations.value.filterNot { it.name.equals(cleaned, ignoreCase = true) } +
+            SavedLocation(cleaned, lat, lng)
+        _savedLocations.value = list
+        persistSavedLocations(list)
+    }
+
+    fun removeSavedLocation(name: String) {
+        val list = _savedLocations.value.filterNot { it.name == name }
+        _savedLocations.value = list
+        persistSavedLocations(list)
     }
 
     /** When the tunnel service last showed it was running (to find gaps in the log). */
@@ -427,6 +471,8 @@ class AppStore(context: Context) {
         const val KEY_BATTERY_SAVING = "batterySaving"
         const val KEY_LAST_ALIVE = "lastAlive"
         const val KEY_MOCK_LOCATION = "mockLocation"
+        const val KEY_LAST_MOCK_LOCATION = "lastMockLocation"
+        const val KEY_SAVED_LOCATIONS = "savedLocations"
         const val KEY_SSH_HOST_KEYS_PREFIX = "sshHostKey:"
     }
 }
