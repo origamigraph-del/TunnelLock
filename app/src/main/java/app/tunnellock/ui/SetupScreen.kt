@@ -590,6 +590,22 @@ private fun MapPickerDialog(
                 drawLine(cross, Offset(w / 2f, 0f), Offset(w / 2f, h), strokeWidth = 2.dp.toPx())
                 drawLine(cross, Offset(0f, h / 2f), Offset(w, h / 2f), strokeWidth = 2.dp.toPx())
             }
+            // Zoom buttons zoom around the centre, so the crosshair stays on the chosen point.
+            Column(
+                Modifier.align(Alignment.CenterEnd).padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FilledTonalButton(
+                    onClick = { mapView.controller.zoomIn() },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(44.dp),
+                ) { Text("+", style = MaterialTheme.typography.titleLarge) }
+                FilledTonalButton(
+                    onClick = { mapView.controller.zoomOut() },
+                    contentPadding = PaddingValues(0.dp),
+                    modifier = Modifier.size(44.dp),
+                ) { Text("−", style = MaterialTheme.typography.titleLarge) }
+            }
             Column(
                 Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -601,8 +617,10 @@ private fun MapPickerDialog(
                         scope.launch {
                             val gp = geocode(context, query.trim())
                             if (gp != null) {
-                                mapView.controller.setZoom(12.0)
-                                mapView.controller.animateTo(gp)
+                                // Land at street level, centred exactly on the result (no
+                                // animation, so the crosshair stays on the point).
+                                mapView.controller.setZoom(16.0)
+                                mapView.controller.setCenter(gp)
                             } else {
                                 notFound = true
                             }
