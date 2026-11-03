@@ -65,6 +65,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.tunnellock.R
@@ -411,6 +419,17 @@ private fun MockLocationCard() {
     val parsed = app.tunnellock.core.geo.CoordinateParser.parse(text)
     val on = current.isNotBlank()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    var showMap by remember { mutableStateOf(false) }
+    if (showMap) {
+        MapPickerDialog(
+            initial = parsed,
+            onCancel = { showMap = false },
+            onConfirm = { lat, lng ->
+                text = String.format(java.util.Locale.US, "%.6f, %.6f", lat, lng)
+                showMap = false
+            },
+        )
+    }
     Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle(stringResource(R.string.hub_mock_title))
         Text(
@@ -427,6 +446,7 @@ private fun MockLocationCard() {
             placeholder = { Text("35.6892, 51.3890") },
             modifier = Modifier.fillMaxWidth(),
         )
+        OutlinedButton(onClick = { showMap = true }) { Text(stringResource(R.string.mock_pick_map)) }
         parsed?.let { Text(stringResource(R.string.mock_parsed, it.format()), style = MaterialTheme.typography.bodySmall) }
         if (parsed == null && text.isNotBlank()) {
             val why = if (app.tunnellock.core.geo.CoordinateParser.looksLikeUrl(text)) R.string.mock_link_no_coords else R.string.mock_bad_coords
@@ -457,6 +477,84 @@ private fun MockLocationCard() {
                     app.tunnellock.vpn.MockLocationService.stop(context)
                     text = ""
                 }) { Text(stringResource(R.string.hub_mock_stop)) }
+            }
+        }
+    }
+}
+
+/**
+ * A full-screen OpenStreetMap picker for the fake-location point. The map pans and zooms; a fixed
+ * crosshair marks the center, and "Use this point" returns the center's coordinates. No Google
+ * dependency and no API key -- tiles come from OpenStreetMap. Only the personal copy opens this
+ * (the device-wide fake is set there).
+ */
+@Composable
+private fun MapPickerDialog(
+    initial: app.tunnellock.core.geo.Coordinates?,
+    onCancel: () -> Unit,
+    onConfirm: (Double, Double) -> Unit,
+) {
+    val context = LocalContext.current
+    val mapView = remember {
+        org.osmdroid.config.Configuration.getInstance().apply {
+            userAgentValue = context.packageName
+            val base = java.io.File(context.cacheDir, "osmdroid")
+            osmdroidBasePath = base
+            osmdroidTileCache = java.io.File(base, "tiles")
+        }
+        org.osmdroid.views.MapView(context).apply {
+            setTileSource(org.osmdroid.tileprovider.tilesource.TileSourceFactory.MAPNIK)
+            setMultiTouchControls(true)
+            controller.setZoom(if (initial != null) 15.0 else 5.0)
+            controller.setCenter(
+                org.osmdroid.util.GeoPoint(initial?.latitude ?: 35.6892, initial?.longitude ?: 51.389),
+            )
+        }
+    }
+    DisposableEffect(Unit) {
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
+    }
+    Dialog(onDismissRequest = onCancel, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
+            AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
+            val cross = MaterialTheme.colorScheme.primary
+            Canvas(Modifier.align(Alignment.Center).size(48.dp)) {
+                val w = size.width
+                val h = size.height
+                drawCircle(cross, radius = w / 3f, style = Stroke(width = 3.dp.toPx()))
+                drawLine(cross, Offset(w / 2f, 0f), Offset(w / 2f, h), strokeWidth = 2.dp.toPx())
+                drawLine(cross, Offset(0f, h / 2f), Offset(w, h / 2f), strokeWidth = 2.dp.toPx())
+            }
+            Text(
+                stringResource(R.string.mock_map_hint),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(12.dp)
+                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
+                    .padding(8.dp),
+            )
+            Row(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.mock_map_cancel))
+                }
+                Button(
+                    onClick = {
+                        val c = mapView.mapCenter
+                        onConfirm(c.latitude, c.longitude)
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text(stringResource(R.string.mock_map_confirm)) }
             }
         }
     }

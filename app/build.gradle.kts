@@ -104,4 +104,6 @@ dependencies {
     implementation(libs.jsch)
     // Ed25519 keys, Curve25519 key exchange and ChaCha20 for JSch (Android has no JCE support for them).
     implementation(libs.bouncycastle)
+    // OpenStreetMap map for picking the fake-location point (no Google dependency, no API key).
+    implementation(libs.osmdroid.android)
 }

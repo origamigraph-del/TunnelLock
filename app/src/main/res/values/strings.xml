@@ -305,4 +305,8 @@
     <string name="hub_mock_start">روشن کردن</string>
     <string name="hub_mock_update">به‌روز کردن</string>
     <string name="hub_mock_stop">خاموش کردن</string>
+    <string name="mock_pick_map">انتخاب از نقشه</string>
+    <string name="mock_map_hint">نقشه را جابه‌جا کن تا نشانهٔ وسط روی محل موردنظر بیفتد، بعد بزن «همین‌جا».</string>
+    <string name="mock_map_confirm">همین‌جا</string>
+    <string name="mock_map_cancel">انصراف</string>
 </resources>
