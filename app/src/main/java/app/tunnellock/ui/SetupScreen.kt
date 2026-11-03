@@ -509,6 +509,8 @@ private fun MapPickerDialog(
             controller.setCenter(
                 org.osmdroid.util.GeoPoint(initial?.latitude ?: 35.6892, initial?.longitude ?: 51.389),
             )
+            // Required attribution for OpenStreetMap tiles ("© OpenStreetMap contributors").
+            overlays.add(org.osmdroid.views.overlay.CopyrightOverlay(context))
         }
     }
     DisposableEffect(Unit) {
