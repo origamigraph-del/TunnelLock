@@ -53,15 +53,17 @@ class MockLocation(private val context: Context) {
     private val manager = context.getSystemService(LocationManager::class.java)
 
     /**
-     * Every provider the apps might read. "fused" matters most: Google Play Services feeds
-     * it from Wi-Fi and cell, so without mocking it the real position leaks even while GPS
-     * is faked. Each provider is handled on its own, so one it will not accept (fused throws
-     * on some phones) does not stop the rest.
+     * The providers an app can read, mocked the way a working spoofer does it. "fused" matters
+     * most: on Android 12+ it is what getLastLocation and Play Services return, so without it the
+     * real position leaks even while GPS is faked. The PASSIVE provider is deliberately NOT mocked:
+     * mocking it throws before Android 12 and, from 12 on, replacing it breaks passive delivery for
+     * the whole device -- and it is unnecessary, because passive listeners receive the fixes from
+     * the other mocked providers automatically. Each provider is handled on its own so one it will
+     * not accept does not stop the rest.
      */
     private val providers: List<String> = buildList {
         add(LocationManager.GPS_PROVIDER)
         add(LocationManager.NETWORK_PROVIDER)
-        add(LocationManager.PASSIVE_PROVIDER)
         if (Build.VERSION.SDK_INT >= 31) add(LocationManager.FUSED_PROVIDER)
     }
     private val lock = Any()

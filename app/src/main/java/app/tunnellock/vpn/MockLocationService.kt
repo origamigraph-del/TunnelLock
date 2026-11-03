@@ -24,11 +24,12 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /**
- * Feeds a user-set fake location to Android's location providers. A mock location only
- * reaches apps in the SAME Android user, so to fake the secure-space apps this must run
- * inside the secure space itself. Android's Developer Options can make only the personal
- * copy the mock-location app, so the secure-space copy has to be granted that once over
- * adb; with it, this service (started by the secure-space app) fakes the protected apps.
+ * Feeds a user-set fake location to Android's location providers, the same way a working
+ * spoofer (e.g. "Fake GPS") does. It runs from the personal profile, where Developer Options
+ * can make TunnelLock the mock-location app (a work-profile app cannot be picked there). A
+ * test provider replaces the real provider device-wide, so the faked place is what every app
+ * reads -- the secure-space apps included -- which is the only no-root way to fake them.
+ * While on, the whole phone's location is the faked one.
  */
 class MockLocationService : Service() {
 
