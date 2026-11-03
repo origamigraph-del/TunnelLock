@@ -21,6 +21,11 @@
     <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" tools:ignore="MockLocation" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- The OpenStreetMap map (osmdroid) caches tiles in app-internal storage, so the
+         WRITE_EXTERNAL_STORAGE its library manifest would merge in is not needed; remove it. -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:node="remove" />
     <!-- Needed to list the personal apps that can be copied into the secure space. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"

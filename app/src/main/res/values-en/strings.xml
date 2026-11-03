@@ -294,4 +294,8 @@
     <string name="hub_mock_start">Turn on</string>
     <string name="hub_mock_update">Update</string>
     <string name="hub_mock_stop">Turn off</string>
+    <string name="mock_pick_map">Pick on map</string>
+    <string name="mock_map_hint">Move the map so the center marker sits on the spot you want, then tap “Use this point”.</string>
+    <string name="mock_map_confirm">Use this point</string>
+    <string name="mock_map_cancel">Cancel</string>
 </resources>
