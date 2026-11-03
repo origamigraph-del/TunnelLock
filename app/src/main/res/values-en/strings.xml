@@ -298,4 +298,9 @@
     <string name="mock_map_hint">Move the map so the center marker sits on the spot you want, then tap “Use this point”.</string>
     <string name="mock_map_confirm">Use this point</string>
     <string name="mock_map_cancel">Cancel</string>
+    <string name="mock_save">Save</string>
+    <string name="mock_save_name">Name for this place</string>
+    <string name="mock_saved_title">Saved locations</string>
+    <string name="mock_map_search">Search a city or area</string>
+    <string name="mock_map_search_none">Nothing found</string>
 </resources>
