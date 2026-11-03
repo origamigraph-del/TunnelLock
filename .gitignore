@@ -10,7 +10,10 @@ captures/
 # Downloaded by CI (see .github/workflows/build.yml)
 app/libs/*.aar
 
-# Never commit signing passwords
+# Never commit the signing keystore or passwords (CI restores the keystore
+# from the KEYSTORE_BASE64 secret; see .github/workflows/build.yml).
+signing/*.jks
+signing/*.keystore
 signing/*.properties
 SIGNING_PASSWORD*
 

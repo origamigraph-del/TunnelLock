@@ -17,8 +17,12 @@ env:
   XRAY_LIB_SHA256: 2efdf731b1ed624eb1cb0d5a4d0aa95c0672e89f9702226d1ba2dc90308630b6
   # NDK used to build the OpenVPN binary.
   NDK_VERSION: 27.2.12479018
-  # Password of signing/release.jks (repository secret).
+  # Password of the release keystore (repository secret).
   SIGNING_PASSWORD: ${{ secrets.SIGNING_PASSWORD }}
+  # Base64 of the release keystore (repository secret). The keystore is NOT committed;
+  # CI writes signing/release.jks from this before building. Produce it with:
+  #   base64 -w0 signing/release.jks
+  KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
   # Token the apps use to post their logs to issue #1 (repository secret, optional).
   LOG_TOKEN: ${{ secrets.LOG_TOKEN }}
   # SHA-256 of the certificate in signing/release.jks. Releases must carry exactly this
@@ -78,6 +82,13 @@ jobs:
           mkdir -p app/src/main/jniLibs
           cp -r native/out/. app/src/main/jniLibs/
           ls -l app/src/main/jniLibs/*/libovpnexec.so
+
+      - name: Provide signing keystore
+        if: env.KEYSTORE_BASE64 != '' && hashFiles('signing/release.jks') == ''
+        run: |
+          mkdir -p signing
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > signing/release.jks
+          echo "::notice title=Signing::keystore restored from the KEYSTORE_BASE64 secret."
 
       - name: Check signing secret
         if: env.SIGNING_PASSWORD == ''
